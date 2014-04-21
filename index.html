@@ -1,0 +1,36 @@
+<html>
+<head>
+	<title>GalaxyOne Alpha 0.10</title>
+	<link rel="stylesheet" type="text/css" href="/codex/game.css">
+	<link rel="stylesheet" type="text/css" href="/codex/chat.css">
+	<style>
+	
+	#debugcanvas {
+		position : fixed;
+		top : 0;
+		left : 0;
+	}
+	
+	</style>
+</head>
+<body>
+<noscript>Update your browser to play the game</noscript>
+
+<!-- Chat UI -->
+
+<div id=chat-container> 
+	<!-- Chat content here -->
+</div>
+<input type=text id=chat-input name=input style="width : 100%" />
+
+
+<!-- Game -->
+<canvas id=debugcanvas></canvas>
+<canvas id=canvas></canvas>
+
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/codex/client.js"></script>
+
+</body>
+</html>
