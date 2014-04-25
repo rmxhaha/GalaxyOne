@@ -1,3 +1,12 @@
+/**
+ *  temporary to do list
+ *   -> vmax for unit ( DONE )
+ *   -> what to do when unit have lost it's sight of target
+ *   -> planet 
+ *   -> put legion pointer at every unit and warhead owned by the legion
+ *   -> put if to prevent sending data of dead unit
+ */
+
 /****************************************************
  *  External Modules
  ****************************************************/
@@ -151,41 +160,38 @@ var WarheadType = {
 	missile : 6
 };
 
-var UnitDatabase = {
-	viewRadius : [],
-	warheadType : []
-};
+var UnitDatabase = [];
 
-UnitDatabase.viewRadius[UnitType.spy] = 700;
-UnitDatabase.viewRadius[UnitType.mothership] = 1000;
-UnitDatabase.viewRadius[UnitType.shuttle] = 600;
-UnitDatabase.viewRadius[UnitType.fighter] = 600;
-UnitDatabase.viewRadius[UnitType.destroyer] = 400;
+/** Metrics
+ *  - viewRadius in pixel
+ *  - reloadSpeed in milliseconds
+ */
 
-UnitDatabase.warheadType[UnitType.spy] = -1;
-UnitDatabase.warheadType[UnitType.mothership] = WarheadType.missile;
-UnitDatabase.warheadType[UnitType.shuttle] = WarheadType.missile;
-UnitDatabase.warheadType[UnitType.fighter] = WarheadType.missile;
-UnitDatabase.warheadType[UnitType.destroyer] = WarheadType.missile;
+UnitDatabase[UnitType.spy] 			= { viewRadius : 700, 	reloadSpeed : 1500,	warheadType : -1,	vmax : 300 };
+UnitDatabase[UnitType.mothership] 	= { viewRadius : 1000, 	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 100 };
+UnitDatabase[UnitType.shuttle]		= { viewRadius : 600,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 350 };
+UnitDatabase[UnitType.fighter]		= { viewRadius : 600,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 400 };
+UnitDatabase[UnitType.destroyer]	= { viewRadius : 400,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 350 };
 
-var WarheadDatabase = {
-	damage : [],
-	radius : []
-};
+var WarheadDatabase = [];
 
-WarheadDatabase.damage[ WarheadType.missile ] = 1;
-WarheadDatabase.radius[ WarheadType.missile ] = 1000;
-
+WarheadDatabase[WarheadType.missile]	= { damage : 0.5, travelRange : 1000, vmax : 500 };
 
 var viewRadiusModule = {
 	viewRadius : function(){
-		return UnitDatabase.viewRadius[this.type];
+		return UnitDatabase[this.type].viewRadius;
 	}
 };
 
-var attackRadiusModule = {
+var attackModule = {
 	attackRadius : function(){
-		return WarheadDatabase.radius[ UnitDatabase.warheadType[this.type] ];
+		return WarheadDatabase[ this.getHeadType() ].travelRange;
+	},
+	reloadSpeed : function(){
+	},
+	lastAttack : new Date,
+	getHeadType : function(){
+		return UnitDatabase[ this.type ].warheadType;
 	}
 }
 
@@ -253,7 +259,7 @@ var MovementModule = {
 		this.ay += -dvy;
 	},
 	
-	update : function( dt ){
+	updateMovement : function( dt ){
 		// truncate acceleration
 		var aLength = vecLength(this.ax, this.ay);
 		if (aLength > this.amax) {
@@ -328,17 +334,41 @@ var HealthModule = {
 var Spaceship = function ( setup ) {
 	this.uniqueId(); // make sure it has an id
 	
+	// HACK FLAG 
+	if( typeof setup.vmax != 'undefined' ){
+		console.log('WARNING : vmax is defined in unit')
+	}
+	
+	this.vmax = UnitDatabase[ setup.type ].vmax;
 	_extend( this, setup );
 }
 
-Spaceship.extend( { type : 0, radius : 30 } );	// default type
+Spaceship.extend({ 
+	type : 0, 
+	radius : 30,
+	update : function( dt ){
+		this.updateMovement( dt );
+	}
+});
+
 Spaceship.extend( HealthModule );
 Spaceship.extend( MovementModule );
 Spaceship.extend( new EventListener("under-attack", "death") );
 Spaceship.extend( viewRadiusModule );
+Spaceship.extend( attackModule );
 
 var Warhead = function( setup ){
 	this.uniqueId(); // make sure it has an id
+	
+	if( !setup.target ){
+		console.log("BUG FLAG : TARGETLESS Warhead");
+	}
+
+	if( typeof setup.vmax != 'undefined' ){
+		console.log('WARNING : vmax is defined in unit')
+	}
+	
+	this.vmax = WarheadDatabase[ this.type ].vmax;
 	
 	_extend( this, setup );
 }
@@ -347,10 +377,26 @@ Warhead.extend({
 	type : WarheadType.missile, 
 	radius : 20,
 	number : 1,
+	distanceTraveled : 0,
+	maxTravelDistance : function(){
+		return WarheadDatabase[this.type].travelRange;
+	},
 	damage : function(){
-		return this.number * WarheadDatabase.damage[ this.type ];
+		return this.number * WarheadDatabase[ this.type ].damage;
+	},
+	update : function( dt ){
+		this.persuitAtFullSpeed( this.target );
+		
+		this.updateMovement( dt );
+		
+		var travelRange = vecLength( this.vx * dt, this.vy * dt );
+		this.distanceTraveled += travelRange;
+		if( this.distanceTraveled > this.maxTravelDistance() ){
+			this.call('explosion');
+		}
 	}
-}); // type is always missile
+});
+
 Warhead.extend( MovementModule );
 Warhead.extend( new EventListener("explosion") );
 
@@ -389,7 +435,6 @@ var Galaxy = function( gWidth, gHeight ){
 		green : 3
 	};
 	
-
 	function Legion( name ){
 		this.name = name;
 		this.id = LegionId[name];
@@ -405,12 +450,17 @@ var Galaxy = function( gWidth, gHeight ){
 	Legion.extend({
 		addUnit : function( unit ){
 			assert( unit instanceof Spaceship, "addUnit : Type is not Spaceship" );
-
+			
+			unit.legion = this;
+			
 			this.units.push( unit );
 			return unit;
 		},
 		addHead : function( warhead ){
 			assert( warhead instanceof Warhead, "addHead : Type is not Warhead" );
+			
+			warhead.legion = this;
+			
 			this.warheads.push( warhead );
 			return warhead;
 		},
@@ -479,8 +529,8 @@ var Galaxy = function( gWidth, gHeight ){
 	}
 	
 	Legion.extend({
-		updateCommandModule : function(){
-			
+		updateCommandModule : function()
+		{
 			// make sure to iterate backward because there is a splice function here
 			for( var i = this.moveList.length; i-- ; )
 			{
@@ -525,14 +575,49 @@ var Galaxy = function( gWidth, gHeight ){
 				
 				// seek at a attacker radius range				
 				var range = unitRange( attacker, target );
-				
-				if( range > attacker.attackRadius() ){
+
+				// EXPERIMENTAL FLAG : 	if target get out of sight change to move order at last position
+				// 						if out of sight in the legion change it into moveOrder
+				// EXPERIMENTAL FAIL
+
+				// EXPERIMENTAL FLAG 2 : if target get out of sight go to last target seen , if not found then stop
+				if( range > attacker.viewRadius() ){
+					this.attackList.splice( i, 1 );
+					
+					this.moveList.push( new MoveOrder( attacker, target.x, target.y ) );	
+				}
+
+
+				if( range > attacker.attackRadius() * 3/4 ){
 					// go seek it
-					attacker.persuit( target.x, target.y );
+					attacker.persuitAtFullSpeed( target );
+
+					//WORK FLAG : if has been reach begin rapid stop
 				}
 				
+
+				// if missile is able to reach target
+				if( range < attacker.attackRadius() ) {
+
+					// gun has been reloaded
+					if( new Date() - attacker.lastAttack > UnitDatabase[ attacker.type ].reloadSpeed )
+					{
+						attacker.lastAttack = new Date;
+						
+						// spawning missile
+						this.addHead( new Warhead({
+								x : attacker.x,
+								y : attacker.y,
+								number : attacker.number, 
+								type : attacker.getHeadType(),
+								vx : attacker.vx,
+								vy : attacker.vy,
+								target : target
+							}) 
+						);
+					}
+				}
 				
-				// WORK FLAG : shoot missile
 			}
 			
 		},
@@ -572,6 +657,8 @@ var Galaxy = function( gWidth, gHeight ){
 				}
 			}
 			
+			console.log( unit );
+			
 			// if unit is not found
 			if( !unit ) return;
 
@@ -596,7 +683,7 @@ var Galaxy = function( gWidth, gHeight ){
 				
 				var target = false;
 				/* searching for the target unit */
-				// breaking the OOP encapsulation rules
+				// BAD OOP FLAG : breaking the OOP encapsulation rules
 				for( var i = 0; i < legions.length; ++ i ){
 					var legion = legions[i];
 
@@ -640,86 +727,82 @@ var Galaxy = function( gWidth, gHeight ){
 		return legion;
 	}
 	
-	/** getLegionData
+	/** getClientData
 	 *  returns current legion spaceship and enemy legions that is visible to the current legion
 	 */
 	 
-	this.getLegionData = function( name ){
-		assert( LegionId.hasOwnProperty( name ), 'getLegionData : Unexpected legion name' );
-				// under construction
+	Legion.extend({
+		getClientData : function(){
+			/* collect units in current legion radar */
 
-		var output = {
-			units : [],
-			heads : []
-		};
-		
-		function cloneSpecifics( real, props ){
-			var clone = {};
-			
-			for( var i = 0; i < props.length; ++ i ){
-				var arg = props[i];
-				clone[arg] = Math.floor( real[arg] );
-			}
-			return clone;
-			
-		}
+			var output = {
+				units : [],
+				heads : []
+			};
+
+			function cloneSpecifics( real, props ){
+				var clone = {};
 				
-		function appendUnit( legionId, unit ){
-			var data = cloneSpecifics( unit, ['x','y','vx','vy','type']);
-			data["legion"] = legionId;
-			
-			
-			output.units.push( data );
-		}
-		
-		function appendHead( legionId, head ){
-			var data = cloneSpecifics( head, ['x','y','vx','vy','type']);
-			data["legion"] = legionId;
-			
-			output.heads.push( data );
-		}
-
-		var currentLegion = false;
-		for( var a = 0; a < legions.length; ++ a ){
-			if( legions[a].name == name ){
-				currentLegion = legions[a];
-				break;
-			}
-		}
-		assert( currentLegion, "getLegionData : Legion is not registered" )
-		
-		for( var a = 0; a < legions.length; ++ a ){
-			var legion = legions[a];
-			var legionId = legions[a].id;
-			
-			if( legion === currentLegion ) {
-				// legion's units
-				for( var i = 0; i < legion.units.length ; ++ i ) 
-					appendUnit( legionId, legion.units[i] );
-			}
-			else {
-				// legion's enemy
-				for( var i = 0; i < legion.units.length ; ++ i ){
-					if( currentLegion.withinVisual( legion.units[i] ) ){
-						appendUnit( legionId, legion.units[i] );
-					}
-				}				
-			}
-
-			// warhead is unable to see so radar that have been fired if get out of range become invisible whether it's the legion's missle or not
-			for( var i = 0; i < legion.warheads.length ; ++ i ){
-				if( currentLegion.withinVisual( legion.warheads[i] ) ){
-					appendHead( legionId, legion.warheads[i] );
+				for( var i = 0; i < props.length; ++ i ){
+					var arg = props[i];
+					clone[arg] = Math.floor( real[arg] );
 				}
+				return clone;
+				
+			}
+					
+			function appendUnit( legionId, unit ){
+				var data = cloneSpecifics( unit, ['x','y','vx','vy','type']);
+				data["legion"] = legionId;
+				
+				output.units.push( data );
 			}
 			
+			function appendHead( legionId, head ){
+				var data = cloneSpecifics( head, ['x','y','vx','vy','type']);
+				data["legion"] = legionId;
+				
+				output.heads.push( data );
+			}
+			
+			// BAD OOP FLAG : breaking the OOP encapsulation rules
+			for( var a = 0; a < legions.length; ++ a ){
+				var legion = legions[a];
+				var legionId = legions[a].id;
+				
+				if( legion === this ) {
+					// legion's units
+					for( var i = 0; i < legion.units.length ; ++ i ) 
+						appendUnit( legionId, legion.units[i] );
+				}
+				else {
+					// legion's enemy
+					for( var i = 0; i < legion.units.length ; ++ i ){
+						if( this.withinVisual( legion.units[i] ) ){
+							appendUnit( legionId, legion.units[i] );
+						}
+					}				
+				}
+
+				// warhead is unable to see so radar that have been fired if get out of range become invisible whether it's the legion's missle or not
+				for( var i = 0; i < legion.warheads.length ; ++ i ){
+					if( this.withinVisual( legion.warheads[i] ) ){
+						appendHead( legionId, legion.warheads[i] );
+					}
+				}
+				
+			}
+			
+			return output;
+			
 		}
-		
-		return output;
-	}
-	
+	});
+	 
 	this.update = function( dt ){	
-		/* collision system */
+		/** Collision System 
+		 *   -> unit collision with Warhead
+		 *   -> unit collision with static objects ( e.g. planets )
+		 */
 		for( var u = 0; u < legions.length; ++ u ){
 			// units against enemy warheads
 			for( var w = 0; w < legions.length; ++ w ){
@@ -832,8 +915,11 @@ var Galaxy = function( gWidth, gHeight ){
 		
 		// WARNING : Collision Avoidance hasn't been tested
 		
+		/** Missile Homing system
+		 *   -> Seek target at full speed
+		 */
 		
-		/* Physics update */
+		/* Legion logics update */
 		for( var i = 0; i < legions.length; ++ i ){
 			legions[i].updateEntities( dt );
 			legions[i].updateCommandModule();
@@ -849,7 +935,8 @@ var redlegion = GalaxyOne.addLegion( "red" );
 
 
 var unitone = redlegion.addUnit( new Spaceship({ x : 1000, y : 800, type : UnitType.mothership, number : 300 }) );
-redlegion.addUnit( new Spaceship({ x : 200, y : 180, type : UnitType.destroyer }) );
+var unitwo = redlegion.addUnit( new Spaceship({ x : 200, y : 180, type : UnitType.destroyer, number : 200 }) );
+
 
 setInterval( function(){
 //	redlegion.issueCommand({uid:unitone.uniqueId(),cid : 0,x : Math.random() * 1000,y : Math.random() * 1000 });
@@ -866,16 +953,10 @@ unitone.on('death', function(){
 var blueLegion = GalaxyOne.addLegion( "blue" );
 
 
-fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000 }) );
-blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000 }) );
+fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 1000, type : UnitType.spy }) );
+blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy }) );
 
-var whead = blueLegion.addHead( new Warhead({ x : 1100, y : 800, vx : -100 }) );
 
-whead.on('explosion' , function(){
-	console.log("it explode brighter than the sun" );
-	console.log( unitone.number );
-	whead = blueLegion.addHead( new Warhead({ x : 1100, y : 800, vx : -100 }) );
-});
 
 /*
 for( var i = 100; i--; ){
@@ -943,6 +1024,13 @@ app.get('/', function (req, res) {
  ****************************************************/
 
 io.on('connection', function( socket ){
+redlegion.issueCommand({
+	uid : unitwo.uniqueId(), 
+	cid : 1, 
+	tid : fune.uniqueId(), 
+	tlegion : blueLegion.id
+});
+
 	var secret = Math.floor( Math.random() * 1000000 );
 	var legion = redlegion; // will be setup by connection later on
 	
@@ -967,12 +1055,13 @@ io.on('connection', function( socket ){
 	});
 	
 	function updateState(){
-		socket.emit('legion', GalaxyOne.getLegionData("blue") );
+		socket.emit('legion', legion.getClientData() );
 		
 	}
 		
 	/**
-	 *  FUTURE FEATURE : update once at first then update again at a certain period of time
+	 *  FUTURE FEATURE : update all data at first then update again at a certain period of time
+	 *  				 only send updates
 	 */
 	callEvery( updateState, 50);
 	updateState();
@@ -981,15 +1070,6 @@ io.on('connection', function( socket ){
 
 /*
 	WORK FLAG : on the socket authentication and routing system
-*/
-/*
-function RefreshState(){
-	var LegiData = GalaxyOne.getLegionData( "blue" );
-	console.log( LegiData.legions.blue.warheads );
-	var LegiData = GalaxyOne.getLegionData( "red" );
-}
-
-callEvery( RefreshState, 100 );
 */
  
  

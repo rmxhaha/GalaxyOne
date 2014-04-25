@@ -1,6 +1,9 @@
 /**
  *  Global 
  *  -> FLAG : add modernizr check feature needed
+ *  -> add local database 
+ *  -> make viewRadius circle
+ *  -> opt for clearing and re drawing necessary object only 
  */
 
 var socket = io.connect('http://localhost/');	
@@ -12,8 +15,8 @@ function _extend( x, y ){
 			x[key] = y[key];
 		}
 	}
-	return x;
-	
+
+	return x;	
 }
 
 /** Chat Room
@@ -56,9 +59,55 @@ chatinput.onkeypress = function(e){
  *   -> Interpolation
  */
 var gRadiusOn = false;
+
+function drawViewCircle( units ){
+	
+	var fullCircle = Math.PI * 2;
+	
+	function angle(){
+		this.from = 0;
+		this.to = fullCircle;
+		
+		function cleanCut( from, to ){
+			
+		}
+		
+		this.cut = function( from, to ){
+			from = from % fullCircle;
+			to = to % fullCircle;
+			
+			if( from > to ){
+				var tmp = from;
+				from = to;
+				to = tmp;
+			}
+			
+			if( to - from ){
+				
+			}
+			
+		}
+	}
+	
+	
+	for( var i = 0; i < units.length; ++ i ){
+		var angle = new angle;
+		var unit = units[i];
+		var rad = viewRadius[ unit.type ];
+		var angle = angles[i];
+		
+		angles[i] = angle;
+		
+		
+	}
+	
+	
+}
  
 var canvas = document.getElementById("canvas");
 var context = canvas.getContext("2d");
+
+var viewRadius = []; // get from server
 
 window.onresize = function( e ){
 	debugcanvas.width = canvas.width = window.innerWidth;
@@ -170,6 +219,7 @@ function mainloop(){
 	/* Interpolation */
 	var dt = timer.reset() / 1000;
 	
+	
 	for( var i = 0 ; i < cdata.units.length; ++ i ){
 		var unit = cdata.units[i];
 				
@@ -195,6 +245,20 @@ function mainloop(){
 
 	context.save();
 	context.translate( -camx, -camy );
+
+	if( gRadiusOn ){
+		// FLAG : NOT FINISHED , circle for range
+		context.strokeStyle = "white";
+		for( var i = 0 ; i < cdata.units.length; ++ i ){
+			var unit = cdata.units[i];
+			
+			// WORK FLAG : if not current legion
+			
+			context.beginPath();
+			context.arc( unit.x,unit.y, 400, 0, Math.PI*2);
+			context.stroke();
+		}
+	}
 		
 	for( var i = 0; i < cdata.units.length; ++ i ){
 		var unit = cdata.units[i];
