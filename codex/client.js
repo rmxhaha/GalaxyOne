@@ -109,10 +109,27 @@ var context = canvas.getContext("2d");
 
 var viewRadius = []; // get from server
 
+function drawBackground( canvas ){
+	var ctx = canvas.getContext("2d");
+	var w = canvas.width;
+	var h = canvas.height;
+	
+	var grd = ctx.createRadialGradient(w/2,h/2,5,w/2,h/2, Math.max(w,h) / 2 );
+	grd.addColorStop(0.6, "#001F43");
+	grd.addColorStop(1, "#001022");
+
+	ctx.fillStyle = grd;
+	ctx.fillRect(0,0,w,h);
+}
+
 window.onresize = function( e ){
 	debugcanvas.width = canvas.width = window.innerWidth;
 	debugcanvas.height = canvas.height = window.innerHeight;
+
+	drawBackground( debugcanvas );
 }
+
+
 
 var mx = 0;
 var my = 0;
@@ -240,8 +257,7 @@ function mainloop(){
 	if( my > window.innerHeight - 20 ) camy += 10;
 	
 
-	context.fillStyle = "#001F43";
-	context.fillRect(0, 0, canvas.width, canvas.height);
+	context.clearRect( 0,0, canvas.width, canvas.height );
 
 	context.save();
 	context.translate( -camx, -camy );
@@ -290,8 +306,10 @@ function mainloop(){
 }
 
 window.onload = function(){
-	canvas.width = window.innerWidth;
-	canvas.height = window.innerHeight;
+	debugcanvas.width = canvas.width = window.innerWidth;
+	debugcanvas.height = canvas.height = window.innerHeight;
 
+	drawBackground( debugcanvas );
+	
 	mainloop();
 }

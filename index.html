@@ -5,7 +5,7 @@
 	<link rel="stylesheet" type="text/css" href="/codex/chat.css">
 	<style>
 	
-	#debugcanvas {
+	.canvas-layer {
 		position : fixed;
 		top : 0;
 		left : 0;
@@ -25,8 +25,8 @@
 
 
 <!-- Game -->
-<canvas id=debugcanvas></canvas>
-<canvas id=canvas></canvas>
+<canvas class=canvas-layer id=debugcanvas></canvas>
+<canvas class=canvas-layer id=canvas></canvas>
 
 
 <script src="/socket.io/socket.io.js"></script>
