@@ -137,6 +137,8 @@ var my = 0;
 var camx = 0;
 var camy = 0;
 
+var drawSize = 100; // size of unit
+
 window.onmousemove = function (e) {
 	mx = e.pageX;
 	my = e.pageY;
@@ -176,6 +178,20 @@ socket.on('legion', function( data ){
 var spaceshipImage = new Image();
 spaceshipImage.src = "/images/Models_M001_1.png";
 
+function ImageCache( image, x, y, width, height, cacheWidth, cacheHeight )
+{
+	var m_canvas = document.createElement('canvas');
+
+	m_canvas.width = cacheWidth;
+	m_canvas.height = cacheHeight;
+	var m_context = m_canvas.getContext('2d');
+	m_context.drawImage( image, x, y, width, height, 0, 0, cacheWidth, cacheHeight );
+	
+	this.cache = m_canvas;
+}
+
+var drawCaches = [];
+
 function drawShip( options ) {
 	var _default = {
 		x : 0,
@@ -187,27 +203,41 @@ function drawShip( options ) {
 	};
 	
 	var setup = _extend( _default, options );
-	
+
+	if( !(
+		camx < setup.x + drawSize/2 &&
+		setup.x - drawSize/2 < camx + canvas.width ||
+		camy < setup.y + drawSize/2 &&
+		setup.y - drawSize/2 < camy + canvas.height ) ) return false;
+		
 	for( var i in setup ){
 		if( setup.hasOwnProperty( i ) && i != 'angle' ){
 			setup[i] = Math.floor( setup[i] );
 		}
 	}
-
+	
+	if( typeof drawCaches[ setup.legion ] == 'undefined' ){
+		drawCaches[ setup.legion ] = [];
+	}
+	
+	if( typeof drawCaches[ setup.legion ][ setup.type ] == 'undefined' ){
+		drawCaches[ setup.legion ][ setup.type ] = new ImageCache( spaceshipImage, setup.type * 100, setup.legion * 100, 100, 100, drawSize, drawSize );
+	}
+	
+	var cache = drawCaches[ setup.legion ][ setup.type ].cache;
+	
 	context.save();
 	context.translate(setup.x, setup.y);
 	context.rotate( setup.angle);
 	context.drawImage(
-		spaceshipImage, 
-		setup.type * 100, 
-		setup.legion * 100, 
-		100, 100, 
-		
+		cache, 		
 		-setup.size/2, 
 		-setup.size/2, 
 		setup.size, setup.size
 		);
 	context.restore();
+	
+	return true;
 }
 
 function angle( entity ){
@@ -232,9 +262,22 @@ var Time = function () {
 
 var timer = new Time;
 
+// past data
+var pcx = 0;
+var pcy = 0;
+var pastRects = [];
+var psize = drawSize;
+
+
+var c = 0;
+var t = 0;
+
 function mainloop(){
 	/* Interpolation */
 	var dt = timer.reset() / 1000;
+	
+	t += dt;
+	if( c ++ % 100 == 0 ) console.log( c / t, " FPS" );
 	
 	
 	for( var i = 0 ; i < cdata.units.length; ++ i ){
@@ -257,9 +300,23 @@ function mainloop(){
 	if( my > window.innerHeight - 20 ) camy += 10;
 	
 
+	context.save();
+	context.translate( -camx, -camy );
+	for( var i = 0; i < pastRects.length; ++ i ){
+		var r = pastRects[i];
+		
+		context.clearRect( r.x - psize, r.y - psize, psize * 2, psize * 2 ); 
+	}
+	context.restore();
 	context.clearRect( 0,0, canvas.width, canvas.height );
 
 	context.save();
+	
+	// storing current data for later ( clearing efficiently )
+	pcx = camx;
+	pcy = camy;
+	psize = drawSize;
+	
 	context.translate( -camx, -camy );
 
 	if( gRadiusOn ){
@@ -279,25 +336,37 @@ function mainloop(){
 	for( var i = 0; i < cdata.units.length; ++ i ){
 		var unit = cdata.units[i];
 		
-		drawShip({
-			x : unit.x,
-			y : unit.y,
-			angle : angle( unit ),
-			type : unit.type,
-			legion : unit.legion
-		});
+		// if drawn
+		if( drawShip({
+				x : unit.x,
+				y : unit.y,
+				angle : angle( unit ),
+				size : drawSize,
+				type : unit.type,
+				legion : unit.legion
+			}))
+			{
+				pastRects.push( unit.x, unit.y );
+			}
 	}
 	
 	for( var i = 0; i < cdata.heads.length; ++ i ){
 		var head = cdata.heads[i];
 		
-		drawShip({
-			x : head.x,
-			y : head.y,
-			angle : angle( head ),
-			type : head.type,
-			legion : head.legion
-		});
+		// if drawn
+		if( drawShip({
+				x : head.x,
+				y : head.y,
+				angle : angle( head ),
+				size : drawSize,
+				type : head.type,
+				legion : head.legion
+			}))
+			{
+				pastRects.push( head.x, head.y );
+				
+			}
+		
 	}
 
 	context.restore();

@@ -597,7 +597,7 @@ var Galaxy = function( gWidth, gHeight ){
 				
 
 				// if missile is able to reach target
-				if( range < attacker.attackRadius() ) {
+				if( attacker.legion.withinVisual( target ) ) {
 
 					// gun has been reloaded
 					if( new Date() - attacker.lastAttack > UnitDatabase[ attacker.type ].reloadSpeed )
