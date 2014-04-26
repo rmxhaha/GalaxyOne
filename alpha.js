@@ -62,7 +62,7 @@ function normalize( vec ) {
 	var length = vecLength(vec.x, vec.y);
 	
 	if( length == 0 ) {
-		return { x : 0, y : 0 };
+		return { x : 0, y : 1 };
 	}
 	
 	vec.x /= length;
@@ -192,7 +192,8 @@ var attackModule = {
 	lastAttack : new Date,
 	getHeadType : function(){
 		return UnitDatabase[ this.type ].warheadType;
-	}
+	},
+	behavior : 'aggressive'
 }
 
 var MovementModule = {
@@ -258,7 +259,10 @@ var MovementModule = {
 		this.ax += -dvx;
 		this.ay += -dvy;
 	},
-	
+	rapidStop : function(){
+		this.ax -= this.vx;
+		this.ay -= this.vy;
+	},
 	updateMovement : function( dt ){
 		// truncate acceleration
 		var aLength = vecLength(this.ax, this.ay);
@@ -340,6 +344,8 @@ var Spaceship = function ( setup ) {
 	}
 	
 	this.vmax = UnitDatabase[ setup.type ].vmax;
+
+	_extend( this, new EventListener("under-attack", "death") );
 	_extend( this, setup );
 }
 
@@ -353,7 +359,6 @@ Spaceship.extend({
 
 Spaceship.extend( HealthModule );
 Spaceship.extend( MovementModule );
-Spaceship.extend( new EventListener("under-attack", "death") );
 Spaceship.extend( viewRadiusModule );
 Spaceship.extend( attackModule );
 
@@ -370,7 +375,15 @@ var Warhead = function( setup ){
 	
 	this.vmax = WarheadDatabase[ this.type ].vmax;
 	
+	_extend( this, new EventListener("explosion") );
 	_extend( this, setup );
+	
+	var dir = normalize({ x : this.vx, y : this.vy });
+	
+	this.vx = dir.x * this.vmax;
+	this.vy = dir.y * this.vmax;
+	
+	console.log( this.vx, this.vy );
 }
 
 Warhead.extend({ 
@@ -384,21 +397,26 @@ Warhead.extend({
 	damage : function(){
 		return this.number * WarheadDatabase[ this.type ].damage;
 	},
+	isOutOfFuel : function(){
+		return this.distanceTraveled > this.maxTravelDistance();
+	},
 	update : function( dt ){
-		this.persuitAtFullSpeed( this.target );
+		if( !this.target.isDead() ){
+			this.persuitAtFullSpeed( this.target );
+		}
 		
 		this.updateMovement( dt );
 		
 		var travelRange = vecLength( this.vx * dt, this.vy * dt );
 		this.distanceTraveled += travelRange;
-		if( this.distanceTraveled > this.maxTravelDistance() ){
+
+		if( this.isOutOfFuel() ){
 			this.call('explosion');
 		}
 	}
 });
 
 Warhead.extend( MovementModule );
-Warhead.extend( new EventListener("explosion") );
 
 var Planet = function( setup ){
 	this.uniqueId();
@@ -470,8 +488,14 @@ var Galaxy = function( gWidth, gHeight ){
 			 * > update existing unit 
 			 **************************************/
 
-			for( var i = 0; i < this.warheads.length; ++ i ){
-				this.warheads[i].update( dt );
+			for( var i = this.warheads.length; i -- ; ){
+				var head = this.warheads[i];
+				
+				head.update( dt );
+
+				if( head.isOutOfFuel() ){
+					this.warheads.splice( i, 1 );
+				}
 			}
 			
 			for( var i = this.units.length; i --;  ){
@@ -552,9 +576,10 @@ var Galaxy = function( gWidth, gHeight ){
 					pDistance( order.tx, order.ty, order.traveler.x, order.traveler.y ) < 10 )
 					{
 
-					// force stop
-					order.traveler.vx = 0;
-					order.traveler.vy = 0;
+					// force stop but keep the angle
+					var dir = normalize({x:vx,y:vy})
+					order.traveler.vx = dir.x / 100;
+					order.traveler.vy = dir.y / 100;
 					
 					// remove the command
 					this.moveList.splice( i, 1 );
@@ -576,28 +601,27 @@ var Galaxy = function( gWidth, gHeight ){
 				// seek at a attacker radius range				
 				var range = unitRange( attacker, target );
 
-				// EXPERIMENTAL FLAG : 	if target get out of sight change to move order at last position
-				// 						if out of sight in the legion change it into moveOrder
-				// EXPERIMENTAL FAIL
-
-				// EXPERIMENTAL FLAG 2 : if target get out of sight go to last target seen , if not found then stop
-				if( range > attacker.viewRadius() ){
+				if( !attacker.legion.withinVisual( target ) ){
 					this.attackList.splice( i, 1 );
 					
 					this.moveList.push( new MoveOrder( attacker, target.x, target.y ) );	
+					continue;
 				}
 
 
-				if( range > attacker.attackRadius() * 3/4 ){
+				if( range > attacker.viewRadius() / 5 ){
 					// go seek it
-					attacker.persuitAtFullSpeed( target );
+					attacker.persuit( target );
 
-					//WORK FLAG : if has been reach begin rapid stop
+				}
+				else {
+					// rapid stop
+					attacker.rapidStop();
 				}
 				
 
 				// if missile is able to reach target
-				if( attacker.legion.withinVisual( target ) ) {
+				if( range < attacker.attackRadius() ) {
 
 					// gun has been reloaded
 					if( new Date() - attacker.lastAttack > UnitDatabase[ attacker.type ].reloadSpeed )
@@ -953,7 +977,7 @@ unitone.on('death', function(){
 var blueLegion = GalaxyOne.addLegion( "blue" );
 
 
-fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 1000, type : UnitType.spy }) );
+fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 10000, type : UnitType.spy }) );
 blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy }) );
 
 
