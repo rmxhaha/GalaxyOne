@@ -336,17 +336,19 @@ var HealthModule = {
 };
 
 var Spaceship = function ( setup ) {
-	this.uniqueId(); // make sure it has an id
-	
 	// HACK FLAG 
 	if( typeof setup.vmax != 'undefined' ){
 		console.log('WARNING : vmax is defined in unit')
 	}
 	
-	this.vmax = UnitDatabase[ setup.type ].vmax;
-
-	_extend( this, new EventListener("under-attack", "death") );
 	_extend( this, setup );
+
+	// make sure that no hack is possible
+	// change later if hack is required
+
+	this.uniqueId(); // make sure it has an unique id
+	this.vmax = UnitDatabase[ setup.type ].vmax;
+	_extend( this, new EventListener("under-attack", "death") );
 }
 
 Spaceship.extend({ 
@@ -375,8 +377,8 @@ var Warhead = function( setup ){
 	
 	this.vmax = WarheadDatabase[ this.type ].vmax;
 	
-	_extend( this, new EventListener("explosion") );
 	_extend( this, setup );
+	_extend( this, new EventListener("explosion") );
 	
 	var dir = normalize({ x : this.vx, y : this.vy });
 	
@@ -681,8 +683,6 @@ var Galaxy = function( gWidth, gHeight ){
 				}
 			}
 			
-			console.log( unit );
-			
 			// if unit is not found
 			if( !unit ) return;
 
@@ -734,6 +734,20 @@ var Galaxy = function( gWidth, gHeight ){
 				this.attackList.push( new AttackOrder( unit, target ) );
 				break;
 			case commandId.split:
+				var num = Math.floor( unit.number / 2 );
+
+				// IMPROVEMENT FLAG : splitting cannot be done to legion lesser than x units
+				if( num < 1 ) return;
+				
+				// plus one if the number is odd
+				unit.number = num + unit.number % 2;
+				
+				// EXPERIMENTAL FLAG
+				var unit2 = this.addUnit( new Spaceship( unit ) );
+				
+				unit.x -= unit.radius;
+				unit2.x += unit2.radius;
+				
 				break;
 			case commandId.guard:
 				break;
@@ -980,6 +994,10 @@ var blueLegion = GalaxyOne.addLegion( "blue" );
 fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 10000, type : UnitType.spy }) );
 blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy }) );
 
+setInterval( function(){
+	console.log( fune.uniqueId() );
+	blueLegion.issueCommand({uid:fune.uniqueId(), cid:2});
+}, 1000 );
 
 
 /*
