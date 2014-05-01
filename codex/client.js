@@ -59,6 +59,8 @@ chatinput.onkeypress = function(e){
  *   -> Interpolation
  */
 var gRadiusOn = false;
+var gDrawOptimizationOn = true;
+
 
 function drawViewCircle( units ){
 	
@@ -134,10 +136,13 @@ window.onresize = function( e ){
 var mx = 0;
 var my = 0;
 
-var camx = 0;
-var camy = 0;
-
-var drawSize = 100; // size of unit
+// NOTE : planetSize always 3 times unitSize
+var camera = {
+	x : 0,
+	y : 0,
+	unitSize : 100,
+	planetSize : 300 
+};
 
 window.onmousemove = function (e) {
 	mx = e.pageX;
@@ -160,19 +165,28 @@ window.onkeypress = function (e) {
 window.onkeyup = function(e){
 	if (e.keyCode == 32) {
 		gRadiusOn = false;
+		context.clearRect( 0, 0, canvas.width, canvas.height ); // FLAG : fast Path ( fix later )
 	}
 }
 
+// current dynamic data
 var cdata = {
 	units : [],
 	heads : []
 };
 
-
+// refresh data
 socket.on('legion', function( data ){
 	cdata = data;
 });
 
+
+// map data
+var planets = [{ x : 1500, y : 300, type : 1 }];
+
+socket.on('planet', function( data ){
+	planets = data;
+});
 
 
 var spaceshipImage = new Image();
@@ -205,10 +219,10 @@ function drawShip( options ) {
 	var setup = _extend( _default, options );
 
 	if( !(
-		camx < setup.x + drawSize/2 &&
-		setup.x - drawSize/2 < camx + canvas.width ||
-		camy < setup.y + drawSize/2 &&
-		setup.y - drawSize/2 < camy + canvas.height ) ) return false;
+		camera.x < setup.x + camera.unitSize/2 &&
+		setup.x - camera.unitSize/2 < camera.x + canvas.width ||
+		camera.y < setup.y + camera.unitSize/2 &&
+		setup.y - camera.unitSize/2 < camera.y + canvas.height ) ) return false;
 		
 	for( var i in setup ){
 		if( setup.hasOwnProperty( i ) && i != 'angle' ){
@@ -221,7 +235,7 @@ function drawShip( options ) {
 	}
 	
 	if( typeof drawCaches[ setup.legion ][ setup.type ] == 'undefined' ){
-		drawCaches[ setup.legion ][ setup.type ] = new ImageCache( spaceshipImage, setup.type * 100, setup.legion * 100, 100, 100, drawSize, drawSize );
+		drawCaches[ setup.legion ][ setup.type ] = new ImageCache( spaceshipImage, setup.type * 100, setup.legion * 100, 100, 100, camera.unitSize, camera.unitSize );
 	}
 	
 	var cache = drawCaches[ setup.legion ][ setup.type ].cache;
@@ -237,6 +251,48 @@ function drawShip( options ) {
 		);
 	context.restore();
 	
+	return true;
+}
+
+var planetImage = new Image();
+planetImage.src = "/images/Planets_M001.png";
+
+var planetDrawCaches = [];
+
+
+function drawPlanet( options ){
+
+	var _default = {
+		x : 0,
+		y : 0,
+		type : 0
+	}
+
+	var setup = _extend( _default, options );
+	
+	if( !(
+		camera.x < setup.x + camera.planetSize/2 &&
+		setup.x - camera.planetSize/2 < camera.x + canvas.width ||
+		camera.y < setup.y + camera.planetSize/2 &&
+		setup.y - camera.planetSize/2 < camera.y + canvas.height ) ) return false;
+	
+	
+	if( typeof planetDrawCaches[ setup.type ] == 'undefined' ){
+		planetDrawCaches[ setup.type ] = new ImageCache( planetImage, setup.type * 300, 0, 300, 300, camera.planetSize, camera.planetSize );
+	}
+	
+	var cache = planetDrawCaches[ setup.type ].cache;
+	
+	context.save();
+	context.translate(setup.x, setup.y);
+	context.drawImage(
+		cache, 		
+		-camera.planetSize/2, 
+		-camera.planetSize/2, 
+		camera.planetSize, camera.planetSize
+		);
+	context.restore();
+	 
 	return true;
 }
 
@@ -262,11 +318,10 @@ var Time = function () {
 
 var timer = new Time;
 
-// past data
-var pcx = 0;
-var pcy = 0;
+// past data for clearing efficiently
 var pastRects = [];
-var psize = drawSize;
+var pastPlanets = [];
+var pastCamera = camera;
 
 
 var c = 0;
@@ -294,30 +349,41 @@ function mainloop(){
 		head.y = head.y + head.vy * dt;
 	}
 	
-	if( mx < 20 ) camx -= 10;
-	if( mx > window.innerWidth - 20 ) camx += 10;
-	if( my < 20 ) camy -= 10;
-	if( my > window.innerHeight - 20 ) camy += 10;
 	
-
-	context.save();
-	context.translate( -camx, -camy );
-	for( var i = 0; i < pastRects.length; ++ i ){
-		var r = pastRects[i];
-		
-		context.clearRect( r.x - psize, r.y - psize, psize * 2, psize * 2 ); 
+	if( mx < 20 ) camera.x -= 10;
+	if( mx > window.innerWidth - 20 ) camera.x += 10;
+	if( my < 20 ) camera.y -= 10;
+	if( my > window.innerHeight - 20 ) camera.y += 10;
+	
+	if( gRadiusOn ){
+		context.clearRect( 0,0, canvas.width,canvas.height );
 	}
-	context.restore();
-	context.clearRect( 0,0, canvas.width, canvas.height );
+	else {
+		// clearing optimization 
+	
+		context.save();
+		context.translate( -pastCamera.x, -pastCamera.y );
+		var psize = pastCamera.unitSize;
+		for( var i = 0; i < pastRects.length; ++ i ){
+			var r = pastRects[i];
 
+			context.clearRect( r.x - psize, r.y - psize, psize * 2, psize * 2 ); 
+		}
+		
+		var psize = pastCamera.planetSize;
+		for( var i = 0; i < pastPlanets.length; ++ i ){
+			var p = pastPlanets[i];
+			context.clearRect( p.x - psize/2, p.y - psize/2, psize, psize );
+		}
+
+		pastRects = [];
+		pastPlanets = [];
+		context.restore();
+	}
+	
+	
 	context.save();
-	
-	// storing current data for later ( clearing efficiently )
-	pcx = camx;
-	pcy = camy;
-	psize = drawSize;
-	
-	context.translate( -camx, -camy );
+	context.translate( -camera.x, -camera.y );
 
 	if( gRadiusOn ){
 		// FLAG : NOT FINISHED , circle for range
@@ -341,12 +407,12 @@ function mainloop(){
 				x : unit.x,
 				y : unit.y,
 				angle : angle( unit ),
-				size : drawSize,
+				size : camera.unitSize,
 				type : unit.type,
 				legion : unit.legion
 			}))
 			{
-				pastRects.push( unit.x, unit.y );
+				pastRects.push( {x : unit.x, y : unit.y } );
 			}
 	}
 	
@@ -358,18 +424,28 @@ function mainloop(){
 				x : head.x,
 				y : head.y,
 				angle : angle( head ),
-				size : drawSize,
+				size : camera.unitSize,
 				type : head.type,
 				legion : head.legion
 			}))
 			{
-				pastRects.push( head.x, head.y );
-				
+				pastRects.push( {x : head.x, y : head.y} );				
 			}
 		
 	}
 
+
+	for( var i = 0; i < planets.length; ++ i ){
+		var p = planets[i];
+		if( drawPlanet( p ) ){
+			pastPlanets.push({ x : p.x, y : p.y});
+		}
+	}
+
 	context.restore();
+	
+	// storing current data for later ( clearing efficiently )
+	pastCamera = _extend( {}, camera );
 	
 	requestAnimationFrame( mainloop );
 }
