@@ -3,8 +3,8 @@
  *   -> vmax for unit ( DONE )
  *   -> what to do when unit have lost it's sight of target
  *   -> planet 
- *   -> put legion pointer at every unit and warhead owned by the legion
- *   -> put if to prevent sending data of dead unit
+ *   -> put legion pointer at every unit and warhead owned by the legion (DONE)
+ *   -> put if to prevent sending data of dead unit (DONE)
  */
 
 /****************************************************
@@ -790,6 +790,8 @@ var Galaxy = function( gWidth, gHeight ){
 			}
 					
 			function appendUnit( legionId, unit ){
+				if( unit.isDead() ) return;
+				
 				var data = cloneSpecifics( unit, ['x','y','vx','vy','type']);
 				data["legion"] = legionId;
 				
@@ -797,6 +799,8 @@ var Galaxy = function( gWidth, gHeight ){
 			}
 			
 			function appendHead( legionId, head ){
+				if( head.isOutOfFuel() ) return;
+			
 				var data = cloneSpecifics( head, ['x','y','vx','vy','type']);
 				data["legion"] = legionId;
 				
