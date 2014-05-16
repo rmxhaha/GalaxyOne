@@ -17,6 +17,7 @@ var assert = require('assert');
  *  Global Modules
  ****************************************************/
 
+ 
 function _extend( x, y ){
 	for (var key in y) {
 		if (y.hasOwnProperty(key)) {
@@ -69,6 +70,26 @@ function normalize( vec ) {
 	vec.y /= length;
 	return vec;
 }
+
+/**********************
+ *  Experimental stackFSM for the new command module
+ */
+var stackFSM = function(){
+	this.stack = [];
+};
+
+stackFSM.extend({
+	pushState : function( callback ){
+		this.stack.push( callback );
+	},
+	popState : function(){
+		this.stack.length = this.stack.length - 1;
+	},
+	update : function( dt ){
+		if( this.stack.length == 0 ) return;
+		this.stack[ this.stack.length - 1 ].bind( this ) ( dt );
+	}
+});
 
 
 /****************************************************
@@ -428,7 +449,7 @@ var Planet = function( setup ){
 
 Planet.extend( MovementModule );
 Planet.extend({ 
-	radius : 100, 
+	radius : 150, 
 	type : 99, 
 	damage : function(){
 		return Infinity;
