@@ -74,6 +74,7 @@ function normalize( vec ) {
 
 /**********************
  *  Experimental stackFSM for the new command module
+ *   level means how deep is the stack
  */
 var stackFSM = function(){
 	this.stack = [];
@@ -88,7 +89,10 @@ stackFSM.extend({
 	},
 	update : function( dt ){
 		if( this.stack.length == 0 ) return;
-		this.stack[ this.stack.length - 1 ].bind( this ) ( dt );
+		this.stack[ this.stack.length - 1 ].apply( this, arguments );
+	},
+	getLevel : function(){
+		return this.stack.length;
 	}
 });
 
@@ -365,12 +369,17 @@ var CommandModule = ( function() {
 		
 	}
 	
+	var pushState = function( state ){
+		state.bind( this );
+		this.brain.pushState( state );
+	}
+	
 	return {
 		createBrain : function(){
 			if( typeof this.brain == 'undefined' ) {
 				this.brain = new stackFSM();
-				
-				this.brain.pushState( idle );
+
+				pushState( idle );
 			}
 		},
 		attack : function( target ){
@@ -386,6 +395,10 @@ var CommandModule = ( function() {
 		split : function(){
 			this.createBrain(); // making sure there is a brain
 			
+		},
+		stop : function(){
+			while( this.brain.getLevel() != 1 )
+				this.brain.popState();
 		}
 	}	
 })();
