@@ -28,7 +28,7 @@ function _extend( x, y ){
 	
 }
 
-Object.prototype.extend = function ( y ) {
+Function.prototype.extend = function ( y ) {
 	return _extend( this.prototype, y );
 }
 
