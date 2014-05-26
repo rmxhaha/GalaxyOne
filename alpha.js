@@ -12,6 +12,7 @@
  ****************************************************/
 
 var assert = require('assert');
+var EventEmitter = require('events').EventEmitter;
 
 /****************************************************
  *  Global Modules
@@ -312,29 +313,6 @@ var MovementModule = {
 	}
 };
 
-var EventListener = function(){
-	this.event = [];
-	for( var i = 0; i < arguments.length; ++ i ){
-		this.event[ arguments[i] ] = [];
-	}
-	
-	// inner function calls for the event
-	this.call = function( event ){
-		if( this.event.hasOwnProperty( event ) ){
-			for( var i = 0; i < this.event[ event ].length; ++ i ){
-				// also pass parameters
-				this.event[ event ][i].apply( this, arguments );
-			}
-		}
-	}
-	
-	// putting callbacks when event is fired
-	this.on = function( event, callback ){
-		if( this.event.hasOwnProperty( event ) ){
-			this.event[ event ].push( callback ); 
-		}
-	}
-};
 
 var HealthModule = {
 	numberMax : 0,
@@ -345,10 +323,10 @@ var HealthModule = {
 
 		this.number -= warhead.damage() / this.shield;
 		if( this.number <= 0 ){
-			this.call( 'death' );
+			this.emit( 'death' );
 		}
 		else {
-			this.call( 'under-attack' );
+			this.emit( 'under-attack' );
 		}
 	},
 	isDead : function(){
@@ -356,7 +334,7 @@ var HealthModule = {
 	}
 };
 
-var Spaceship = function ( setup ) {
+var Spaceship = function Spaceship( setup ) {
 	// HACK FLAG 
 	if( typeof setup.vmax != 'undefined' ){
 		console.log('WARNING : vmax is defined in unit')
@@ -369,9 +347,9 @@ var Spaceship = function ( setup ) {
 
 	this.uniqueId(); // make sure it has an unique id
 	this.vmax = UnitDatabase[ setup.type ].vmax;
-	_extend( this, new EventListener("under-attack", "death") );
 }
 
+Spaceship.extend( EventEmitter.prototype )
 Spaceship.extend({ 
 	type : 0, 
 	radius : 30,
@@ -385,7 +363,7 @@ Spaceship.extend( MovementModule );
 Spaceship.extend( viewRadiusModule );
 Spaceship.extend( attackModule );
 
-var Warhead = function( setup ){
+var Warhead = function Warhead( setup ){
 	this.uniqueId(); // make sure it has an id
 	
 	if( !setup.target ){
@@ -399,7 +377,6 @@ var Warhead = function( setup ){
 	this.vmax = WarheadDatabase[ this.type ].vmax;
 	
 	_extend( this, setup );
-	_extend( this, new EventListener("explosion") );
 	
 	var dir = normalize({ x : this.vx, y : this.vy });
 	
@@ -409,6 +386,7 @@ var Warhead = function( setup ){
 	console.log( this.vx, this.vy );
 }
 
+Warhead.extend( EventEmitter.prototype );
 Warhead.extend({ 
 	type : WarheadType.missile, 
 	radius : 20,
@@ -434,7 +412,7 @@ Warhead.extend({
 		this.distanceTraveled += travelRange;
 
 		if( this.isOutOfFuel() ){
-			this.call('explosion');
+			this.emit('explosion');
 		}
 	}
 });
@@ -877,14 +855,14 @@ var Galaxy = function( gWidth, gHeight ){
 				
 				/** check if warhead hits
 				 *  if it does tell unit that it has been hit
-				 *  				call event explosion
+				 *  				emit event explosion
 				 *  				and destroy the warhead after that
 				 */
 				for( var i = 0; i < units.length; ++ i ){
 					for( var k = warheads.length; k -- ; ){
 						if( unitCollide( units[i], warheads[k] ) ){
 							units[i].hit( warheads[k] );
-							warheads[k].call('explosion');
+							warheads[k].emit('explosion');
 							warheads.splice( k, 1 );
 						}
 					}
