@@ -334,6 +334,62 @@ var HealthModule = {
 	}
 };
 
+
+var CommandModule = ( function() {
+	/** CommandModule
+	 *   Here lies a Finite State Machine for the ship to follow command
+	 *   with basically 3 mentality of the ship
+	 *    -> aggressive 
+	 *    -> protective
+	 *  
+	 *  Note : use bind to provide data to command that need additional data ( move, attack, etc. )
+	 */
+	
+	
+	var aggressiveIdle = function(){
+		
+	}
+	var chaseAttack = function(){
+		
+	}
+	
+	var move = function(){
+
+	}
+
+	var anchorAttack = function(){
+		
+	}
+
+	var protectiveIdle = function(){	
+		
+	}
+	
+	return {
+		createBrain : function(){
+			if( typeof this.brain == 'undefined' ) {
+				this.brain = new stackFSM();
+				
+				this.brain.pushState( idle );
+			}
+		},
+		attack : function( target ){
+			this.createBrain(); // making sure there is a brain
+		},
+		moveTo : function( x, y ){
+			this.createBrain(); // making sure there is a brain
+			
+		},
+		guard : function( x, y ){
+			this.createBrain(); // making sure there is a brain
+		},
+		split : function(){
+			this.createBrain(); // making sure there is a brain
+			
+		}
+	}	
+})();
+
 var Spaceship = function Spaceship( setup ) {
 	// HACK FLAG 
 	if( typeof setup.vmax != 'undefined' ){
