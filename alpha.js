@@ -11,8 +11,9 @@
  *   -> put if to prevent sending data of dead unit (DONE)
  *   -> restructure code to be more fit to MVC in the client side ( Backbone js )
  *   -> restructure folder to make it easier to find files
+ *  	-> /public, /module ,
  *   -> divide this file into multiple file
- *   -> sending data by prompt rather than socket.io connection b/c networking errors all the time
+ *   -> sending data by prompt rather than socket.io connection b/c networking errors all the time ( DENIED, b/c restarting server is no big deal and creating interface for prompt is kind of hard )
  */
 
 /****************************************************
@@ -403,17 +404,15 @@ var CommandModule = ( function() {
 		}
 	}
 			
-	var chaseAttack = function(){
+	var chaseAttack = function( target ){
 		/**
 		 *  if enemy - self distance is 1/5 fire range then stop else chase
 		 *  if enemy - self distance is fire range than fire missile
 		 *  if enemy - self distance is out of sight then popState and pushState move order to last coordinate seen
 		 *  
-		 *  this.target -> data came from bind when pushing state
 		 */
 		 
-		var target = this.target;
-		
+	
 		if( target.isDead() || this.isDead() ){
 			this.brain.popState();
 
@@ -1067,7 +1066,7 @@ var redlegion = GalaxyOne.addLegion( "red" );
 
 var unitone = redlegion.addUnit( new Spaceship({ x : 1000, y : 800, type : UnitType.mothership, number : 300 }) );
 var unitwo = redlegion.addUnit( new Spaceship({ x : 200, y : 180, type : UnitType.destroyer, number : 200 }) );
-
+var unit3 = redlegion.addUnit( new Spaceship({ x : 1500, y : 2000, type : UnitType.shuttle, number : 50 }) );
 
 
 unitone.on('under-attack', function(){
@@ -1084,14 +1083,25 @@ var blueLegion = GalaxyOne.addLegion( "blue" );
 fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 10000, type : UnitType.spy }) );
 blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy }) );
 
-fune.moveTo( 0, 0 );
+
+setInterval( function(){
+	fune.moveTo( 0, 0 );	
+}, 12000 );
+
+setTimeout( function(){
+	setInterval( function(){
+		fune.moveTo( 1000, 1000 );
+	}, 12000 );
+}, 6000 );
 
 setInterval( function(){
 	console.log( fune.x, fune.y );
 	console.log( fune.vx, fune.vy );
 }, 1000 );
 
-
+unitone.attack( fune );
+unitwo.attack( fune );
+unit3.attack( fune );
 /*
 setInterval( function(){
 	console.log( fune.uniqueId() );
@@ -1192,7 +1202,7 @@ redlegion.issueCommand({
 	 *  FUTURE FEATURE : update all data at first then update again at a certain period of time
 	 *  				 only send updates
 	 */
-	callEvery( updateState, 50);
+	callEvery( updateState, 100 );
 	updateState();
 });
 
