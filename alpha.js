@@ -750,127 +750,8 @@ var Galaxy = function( gWidth, gHeight ){
 	};
 	 
 
-	function AttackOrder( attacker, target ){
-		this.attacker = attacker;
-		this.target = target;
-	}
-	
-	function MoveOrder( traveler, tx, ty ){
-		this.traveler = traveler;
-		this.tx = tx;
-		this.ty = ty;
-	}
 	
 	Legion.extend({
-		updateCommandModule : function()
-		{
-			// make sure to iterate backward because there is a splice function here
-			for( var i = this.moveList.length; i-- ; )
-			{
-				var order = this.moveList[i];
-				order.traveler.seek( order.tx, order.ty );
-
-				// remove when the target has died
-				if( order.traveler.isDead() ){
-					this.moveList.splice( i, 1 );
-					continue;
-				}
-				
-				var vx = order.traveler.vx;
-				var vy = order.traveler.vy;
-				
-				if( // unit is considered have finished it's command direction
-					-10 < vx && vx < 10 &&
-					-10 < vy && vy < 10 &&
-					pDistance( order.tx, order.ty, order.traveler.x, order.traveler.y ) < 10 )
-					{
-
-					// force stop but keep the angle
-					var dir = normalize({x:vx,y:vy})
-					order.traveler.vx = dir.x / 100;
-					order.traveler.vy = dir.y / 100;
-					
-					// remove the command
-					this.moveList.splice( i, 1 );
-				}
-				
-			}
-			
-			for( var i = this.attackList.length; i --;  ){
-				var order = this.attackList[i];
-				var attacker = order.attacker;
-				var target = order.target;
-
-				// remove when the target or attacker has died
-				if( target.isDead() || attacker.isDead() ){
-					this.attackList.splice( i, 1 );
-					continue;
-				}
-				
-				// seek at a attacker radius range				
-				var range = unitRange( attacker, target );
-
-				if( !attacker.legion.withinVisual( target ) ){
-					this.attackList.splice( i, 1 );
-					
-					this.moveList.push( new MoveOrder( attacker, target.x, target.y ) );	
-					continue;
-				}
-
-
-				if( range > attacker.viewRadius() / 5 ){
-					// go seek it
-					attacker.persuit( target );
-
-				}
-				else {
-					// rapid stop
-					attacker.rapidStop();
-				}
-				
-
-				// if missile is able to reach target
-				if( range < attacker.attackRadius() ) {
-
-					// gun has been reloaded
-					if( new Date() - attacker.lastAttack > UnitDatabase[ attacker.type ].reloadSpeed )
-					{
-						attacker.lastAttack = new Date;
-						
-						// spawning missile
-						this.addHead( new Warhead({
-								x : attacker.x,
-								y : attacker.y,
-								number : attacker.number, 
-								type : attacker.getHeadType(),
-								vx : attacker.vx,
-								vy : attacker.vy,
-								target : target
-							}) 
-						);
-					}
-				}
-				
-			}
-			
-		},
-		
-		stopUnit : function( uid ){
-			for( var i = 0; i < this.moveList.length; ++ i ){
-				if( this.moveList[i].traveler.uniqueId() == uid ){
-					this.moveList.splice( i, 1 );
-					return;
-				}
-			}
-			for( var i = 0; i < this.attackList.length; ++ i ){
-				if( this.attackList[i].attacker.uniqueId() == uid ){
-					this.attackList.splice( i, 1 );
-					return;
-				}
-			}
-			
-		},
-		
 		/* WARNING : make sure to have a very through check because data coming to this function is from client and can be hacked */
 		issueCommand : function( command )
 		{
@@ -1173,7 +1054,6 @@ var Galaxy = function( gWidth, gHeight ){
 		/* Legion logics update */
 		for( var i = 0; i < legions.length; ++ i ){
 			legions[i].updateEntities( dt );
-			legions[i].updateCommandModule();
 		}
 		
 	}
