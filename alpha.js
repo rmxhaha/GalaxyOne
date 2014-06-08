@@ -2,9 +2,17 @@
  *  temporary to do list
  *   -> vmax for unit ( DONE )
  *   -> what to do when unit have lost it's sight of target
+ *     solution : 
+ *          aggressive mode : go there and if found then chase again if not then stop
+ *          protective mode : popState
  *   -> planet 
+ *      wishlist : undestructable and static, crashing into it won't damage
  *   -> put legion pointer at every unit and warhead owned by the legion (DONE)
  *   -> put if to prevent sending data of dead unit (DONE)
+ *   -> restructure code to be more fit to MVC in the client side ( Backbone js )
+ *   -> restructure folder to make it easier to find files
+ *   -> divide this file into multiple file
+ *   -> sending data by prompt rather than socket.io connection b/c networking errors all the time
  */
 
 /****************************************************
@@ -26,7 +34,6 @@ function _extend( x, y ){
 		}
 	}
 	return x;
-	
 }
 
 Function.prototype.extend = function ( y ) {
@@ -93,6 +100,9 @@ stackFSM.extend({
 	},
 	getLevel : function(){
 		return this.stack.length;
+	},
+	wipe : function(){
+		this.stack.length = 0;
 	}
 });
 
@@ -214,12 +224,32 @@ var attackModule = {
 		return WarheadDatabase[ this.getHeadType() ].travelRange;
 	},
 	reloadSpeed : function(){
+		return UnitDatabase[ this.type ].reloadSpeed;
 	},
 	lastAttack : new Date,
 	getHeadType : function(){
 		return UnitDatabase[ this.type ].warheadType;
 	},
-	behavior : 'aggressive'
+	launchWarHeadAt : function( target ){
+		if( unitRange( this, target ) > this.attackRadius() ) return;
+		
+		var now = new Date();
+		
+		if( now - this.lastAttack > this.reloadSpeed() ){
+			this.lastAttack = now;
+			
+			this.legion.addHead( new Warhead({
+				x : this.x,
+				y : this.y,
+				number : this.number,
+				type : this.getHeadType(),
+				vx : this.vx,
+				vy : this.vy,
+				target : target
+			}) );
+		}
+	},
+	mental : 'aggressive'
 }
 
 var MovementModule = {
@@ -342,52 +372,147 @@ var HealthModule = {
 var CommandModule = ( function() {
 	/** CommandModule
 	 *   Here lies a Finite State Machine for the ship to follow command
-	 *   with basically 3 mentality of the ship
+	 *   with basically 2 mentality of the ship
 	 *    -> aggressive 
 	 *    -> protective
 	 *  
 	 *  Note : use bind to provide data to command that need additional data ( move, attack, etc. )
 	 */
-	
-	
-	var aggressiveIdle = function(){
-		
-	}
-	var chaseAttack = function(){
-		
-	}
-	
-	var move = function(){
 
+	
+	var idle = function(){
+		/**
+		 * aggressive
+		 *  if enemy nearby then pushState chase attack
+		 * protective
+		 *  if enemy nearby pushState anchorAttack
+		 */
+		 
+		switch( this.mental ){
+		case 'aggressive':
+			
+		break;
+		case 'protective':
+			
+			break;
+		}
+		
+		if( -10 >= this.vx || this.vx >= 10 ||
+			-10 >= this.vy || this.vy >= 10 ){
+			this.rapidStop();
+		}
+	}
+			
+	var chaseAttack = function(){
+		/**
+		 *  if enemy - self distance is 1/5 fire range then stop else chase
+		 *  if enemy - self distance is fire range than fire missile
+		 *  if enemy - self distance is out of sight then popState and pushState move order to last coordinate seen
+		 *  
+		 *  this.target -> data came from bind when pushing state
+		 */
+		 
+		var target = this.target;
+		
+		if( target.isDead() || this.isDead() ){
+			this.brain.popState();
+
+			return;
+		}
+		
+		
+		if( !this.legion.withinVisual( target )){
+			this.brain.popState();
+			this.brain.pushState( move.bind( this, target.x, target.y ) );
+			
+			return;
+		}
+
+		var range = unitRange( this, target );
+		
+		if( range > this.viewRadius() / 5 ){
+			this.persuit( target );
+		}
+		else {
+			this.rapidStop();
+		}
+		
+		this.launchWarHeadAt( target );
+		
+	}
+	
+	var move = function( tx, ty ){
+		/**
+		 *  move to designated target
+		 *  if enemy nearby shoot if close enough
+		 */
+		switch( this.mental ){
+		case 'aggressive':
+			
+		break;
+		case 'protective':
+			
+			break;
+		}
+		
+		if( this.isDead() ) 
+			this.brain.popState();
+		
+		
+		this.seek( tx, ty );
+		
+		if( 
+			-10 < this.vx && this.vx < 10 &&
+			-10 < this.vy && this.vy < 10 &&
+			pDistance( tx, ty, this.x, this.y ) < 10 )
+			{
+			
+			// force stop
+			this.vx = 0;
+			this.vy = 0;
+			this.ax = 0;
+			this.ay = 0;
+			
+			this.brain.popState();
+			
+			}
+		
 	}
 
 	var anchorAttack = function(){
-		
+		/**
+		 * protective
+		 * 	if enemy in close enough range then fire
+		 *  if not then popState
+		 * aggressive
+		 *  popState
+		 *  chaseAttack( target )
+		 */
 	}
 
-	var protectiveIdle = function(){	
-		
-	}
-	
-	var pushState = function( state ){
-		state.bind( this );
-		this.brain.pushState( state );
-	}
+
 	
 	return {
 		createBrain : function(){
 			if( typeof this.brain == 'undefined' ) {
 				this.brain = new stackFSM();
-
-				pushState( idle );
+				this.mental = "protective";
+				
+				this.brain.pushState( idle );
 			}
 		},
 		attack : function( target ){
 			this.createBrain(); // making sure there is a brain
+			this.stop();
+
+			// pushState chaseAttack
+			this.brain.pushState( chaseAttack.bind( this, target ) );
 		},
 		moveTo : function( x, y ){
 			this.createBrain(); // making sure there is a brain
+			this.stop();
 			
+			this.brain.pushState( move.bind( this, x, y ) );
 		},
 		guard : function( x, y ){
 			this.createBrain(); // making sure there is a brain
@@ -399,6 +524,18 @@ var CommandModule = ( function() {
 		stop : function(){
 			while( this.brain.getLevel() != 1 )
 				this.brain.popState();
+		},
+		changeMentality : function( mental ){
+			switch( mental ){
+			case 'aggressive':
+			case 'protective':
+				this.mental = mental;
+				break;
+			}
+		},
+		updateState : function( dt ){
+			this.createBrain();
+			this.brain.update( dt );
 		}
 	}	
 })();
@@ -423,6 +560,7 @@ Spaceship.extend({
 	type : 0, 
 	radius : 30,
 	update : function( dt ){
+		this.updateState( dt );
 		this.updateMovement( dt );
 	}
 });
@@ -431,6 +569,7 @@ Spaceship.extend( HealthModule );
 Spaceship.extend( MovementModule );
 Spaceship.extend( viewRadiusModule );
 Spaceship.extend( attackModule );
+Spaceship.extend( CommandModule );
 
 var Warhead = function Warhead( setup ){
 	this.uniqueId(); // make sure it has an id
@@ -569,13 +708,13 @@ var Galaxy = function( gWidth, gHeight ){
 			}
 			
 			for( var i = this.units.length; i --;  ){
-				if( !this.units[i].isDead() ){
-					this.units[i].update( dt );
+				// remove dead unit
+				if( this.units[i].isDead() ){
+					this.units.splice( i, 1 );					
+					continue;
 				}
-				else {
-					// remove dead unit
-					this.units.splice( i, 1 );
-				}
+				
+				this.units[i].update( dt );
 			}
 		},
 		withinVisual : function( entity ){
@@ -829,6 +968,8 @@ var Galaxy = function( gWidth, gHeight ){
 		
 		// register legion existence
 		var legion = new Legion( name );
+		legion.galaxy = this;
+		
 		legions.push( legion );
 		return legion;
 	}
@@ -1048,9 +1189,6 @@ var unitone = redlegion.addUnit( new Spaceship({ x : 1000, y : 800, type : UnitT
 var unitwo = redlegion.addUnit( new Spaceship({ x : 200, y : 180, type : UnitType.destroyer, number : 200 }) );
 
 
-setInterval( function(){
-//	redlegion.issueCommand({uid:unitone.uniqueId(),cid : 0,x : Math.random() * 1000,y : Math.random() * 1000 });
-}, 5000 );
 
 unitone.on('under-attack', function(){
 	console.log("I am hit !");
@@ -1066,11 +1204,20 @@ var blueLegion = GalaxyOne.addLegion( "blue" );
 fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 10000, type : UnitType.spy }) );
 blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy }) );
 
+fune.moveTo( 0, 0 );
+
+setInterval( function(){
+	console.log( fune.x, fune.y );
+	console.log( fune.vx, fune.vy );
+}, 1000 );
+
+
+/*
 setInterval( function(){
 	console.log( fune.uniqueId() );
 	blueLegion.issueCommand({uid:fune.uniqueId(), cid:2});
 }, 1000 );
-
+*/
 
 /*
 for( var i = 100; i--; ){
@@ -1088,20 +1235,6 @@ var flag = false;
 function mainloop( dt ){
 	// convert to milliseconds
 	dt /= 1000; 
-	
-	if( fune.x < 10 && flag ){
-		flag = false;
-	}
-	else if( fune.x > 990 && !flag ){
-		flag = true;
-	}
-
-	if( flag ) {
-		fune.seek( 0, 0 );
-	}
-	else {
-		fune.seek( 1000, 1000 );
-	}
 	
 	GalaxyOne.update( dt );	
 }
@@ -1138,12 +1271,14 @@ app.get('/', function (req, res) {
  ****************************************************/
 
 io.on('connection', function( socket ){
+/*
 redlegion.issueCommand({
 	uid : unitwo.uniqueId(), 
 	cid : 1, 
 	tid : fune.uniqueId(), 
 	tlegion : blueLegion.id
 });
+*/
 
 	var secret = Math.floor( Math.random() * 1000000 );
 	var legion = redlegion; // will be setup by connection later on
