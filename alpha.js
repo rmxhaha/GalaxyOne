@@ -1,6 +1,10 @@
 /**
+ *	Important : 
+ *   -> unit and warhead radius based on number
+ *  
+ *  Not So important
+ *   -> divide this file into multiple file
  *  temporary to do list
- *   -> vmax for unit ( DONE )
  *   -> what to do when unit have lost it's sight of target
  *     solution : 
  *          aggressive mode : go there and if found then chase again if not then stop
@@ -12,8 +16,8 @@
  *   -> restructure code to be more fit to MVC in the client side ( Backbone js )
  *   -> restructure folder to make it easier to find files
  *  	-> /public, /module ,
- *   -> divide this file into multiple file
  *   -> sending data by prompt rather than socket.io connection b/c networking errors all the time ( DENIED, b/c restarting server is no big deal and creating interface for prompt is kind of hard )
+
  */
 
 /****************************************************
@@ -51,6 +55,7 @@ if ( typeof Object.prototype.uniqueId == "undefined" ) {
 	};
 }
 
+var freeze = Object.freeze;
 
 function vecLength(x, y) {
 	return Math.sqrt(x * x + y * y);
@@ -183,53 +188,42 @@ var gWidth = 5000;
 var gHeight = 5000;
 
 
-var UnitType = {
-	spy : 0,
-	mothership : 1,
-	shuttle : 2,
-	fighter : 3,
-	destroyer : 4,
-	explorer : 5
-};
-
-
-var WarheadType = {
-	missile : 6
-};
-
-var UnitDatabase = [];
-
 /** Metrics
  *  - viewRadius in pixel
  *  - reloadSpeed in milliseconds
  */
+var WarheadType = {
+	missile : { codex : 6, damage : 0.5, travelRange : 1000, vmax : 500 }
+};
 
-UnitDatabase[UnitType.spy] 			= { viewRadius : 700, 	reloadSpeed : 1500,	warheadType : -1,	vmax : 300 };
-UnitDatabase[UnitType.mothership] 	= { viewRadius : 1000, 	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 100 };
-UnitDatabase[UnitType.shuttle]		= { viewRadius : 600,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 350 };
-UnitDatabase[UnitType.fighter]		= { viewRadius : 600,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 400 };
-UnitDatabase[UnitType.destroyer]	= { viewRadius : 400,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 350 };
+var UnitType = {
+	spy : { codex : 0, viewRadius : 700, 	reloadSpeed : 1500,	warheadType : -1,	vmax : 300 },
+	mothership : { codex : 1, viewRadius : 1000, 	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 100 },
+	shuttle : { codex : 2, viewRadius : 600,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 350 },
+	fighter :  { codex : 3, viewRadius : 600,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 400 },
+	destroyer : { codex : 4, viewRadius : 400,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 350 },
+	explorer : { codex : 5, viewRadius : 400,	reloadSpeed : 1500,	warheadType : WarheadType.missile, vmax : 350 }
+};
 
-var WarheadDatabase = [];
 
-WarheadDatabase[WarheadType.missile]	= { damage : 0.5, travelRange : 1000, vmax : 500 };
+
 
 var viewRadiusModule = {
 	viewRadius : function(){
-		return UnitDatabase[this.type].viewRadius;
+		return this.type.viewRadius;
 	}
 };
 
 var attackModule = {
 	attackRadius : function(){
-		return WarheadDatabase[ this.getHeadType() ].travelRange;
+		return this.type.warheadType.travelRange;
 	},
 	reloadSpeed : function(){
-		return UnitDatabase[ this.type ].reloadSpeed;
+		return this.type.reloadSpeed;
 	},
 	lastAttack : new Date,
 	getHeadType : function(){
-		return UnitDatabase[ this.type ].warheadType;
+		return this.type.warheadType;
 	},
 	launchWarHeadAt : function( target ){
 		if( unitRange( this, target ) > this.attackRadius() ) return;
@@ -551,7 +545,7 @@ var Spaceship = function Spaceship( setup ) {
 	// change later if hack is required
 
 	this.uniqueId(); // make sure it has an unique id
-	this.vmax = UnitDatabase[ setup.type ].vmax;
+	this.vmax = setup.type.vmax;
 }
 
 Spaceship.extend( EventEmitter.prototype )
@@ -581,7 +575,7 @@ var Warhead = function Warhead( setup ){
 		console.log('WARNING : vmax is defined in unit')
 	}
 	
-	this.vmax = WarheadDatabase[ this.type ].vmax;
+	this.vmax = this.type.vmax;
 	
 	_extend( this, setup );
 	
@@ -600,10 +594,10 @@ Warhead.extend({
 	number : 1,
 	distanceTraveled : 0,
 	maxTravelDistance : function(){
-		return WarheadDatabase[this.type].travelRange;
+		return this.type.travelRange;
 	},
 	damage : function(){
-		return this.number * WarheadDatabase[ this.type ].damage;
+		return this.number * this.type.damage;
 	},
 	isOutOfFuel : function(){
 		return this.distanceTraveled > this.maxTravelDistance();
@@ -881,8 +875,9 @@ var Galaxy = function( gWidth, gHeight ){
 			function appendUnit( legionId, unit ){
 				if( unit.isDead() ) return;
 				
-				var data = cloneSpecifics( unit, ['x','y','vx','vy','type']);
-				data["legion"] = legionId;
+				var data = cloneSpecifics( unit, ['x','y','vx','vy']);
+				data.type = unit.type.codex;
+				data.legion = legionId;
 				
 				output.units.push( data );
 			}
@@ -890,8 +885,9 @@ var Galaxy = function( gWidth, gHeight ){
 			function appendHead( legionId, head ){
 				if( head.isOutOfFuel() ) return;
 			
-				var data = cloneSpecifics( head, ['x','y','vx','vy','type']);
-				data["legion"] = legionId;
+				var data = cloneSpecifics( head, ['x','y','vx','vy']);
+				data.type = head.type.codex;
+				data.legion = legionId;
 				
 				output.heads.push( data );
 			}
