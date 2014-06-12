@@ -1050,12 +1050,13 @@ var Galaxy = function( gWidth, gHeight ){
 				}
 				
 				if( mostThreatening ){
-					var MAX_AVOID_FORCE = unit.amax / 2;
+
+					var MAX_AVOID_FORCE = unit.amax;
 					var avoidance_force = normalize({ x : ahead_x - mostThreatening.x, y : ahead_y - mostThreatening.y});
-
-					this.ax += avoidance_force.x * MAX_AVOID_FORCE;
-					this.ay += avoidance_force.y * MAX_AVOID_FORCE;
-
+					console.log( avoidance_force );
+					
+					unit.ax += avoidance_force.x * MAX_AVOID_FORCE;
+					unit.ay += avoidance_force.y * MAX_AVOID_FORCE;
 				}
 				
 				
@@ -1124,9 +1125,9 @@ setTimeout( function(){
 	}, 12000 );
 }, 6000 );
 
-//unitone.attack( fune );
-//unitwo.attack( fune );
-//unit3.attack( fune );
+unitone.attack( fune );
+unitwo.attack( fune );
+unit3.attack( fune );
 
 /*
 setInterval( function(){
@@ -1142,7 +1143,7 @@ for( var i = 100; i--; ){
 }
 */
 // haven't been tested
-GalaxyOne.addPlanet( new Planet({ x : 500, y : 500, type : 0 }) );
+GalaxyOne.addPlanet( new Planet({ x : 500, y : 400, type : 0 }) );
 
 
 var flag = false;
