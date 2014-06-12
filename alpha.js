@@ -1,5 +1,7 @@
 /**
  *	Important : 
+ *	 -> when unit hits planet, it doesn't penetrate 
+ *	 -> avoid hitting planet to smooth things out
  *   -> unit and warhead radius based on number
  *  
  *  Not So important
@@ -53,6 +55,17 @@ if ( typeof Object.prototype.uniqueId == "undefined" ) {
 		}
 		return this.__uniqueid;
 	};
+}
+
+function cloneSpecifics( real, props ){
+	var clone = {};
+	
+	for( var i = 0; i < props.length; ++ i ){
+		var arg = props[i];
+		clone[arg] = Math.floor( real[arg] );
+	}
+	return clone;
+	
 }
 
 var freeze = Object.freeze;
@@ -546,6 +559,7 @@ var Spaceship = function Spaceship( setup ) {
 
 	this.uniqueId(); // make sure it has an unique id
 	this.vmax = setup.type.vmax;
+	this.radius = 50;
 }
 
 Spaceship.extend( EventEmitter.prototype )
@@ -583,8 +597,6 @@ var Warhead = function Warhead( setup ){
 	
 	this.vx = dir.x * this.vmax;
 	this.vy = dir.y * this.vmax;
-	
-	console.log( this.vx, this.vy );
 }
 
 Warhead.extend( EventEmitter.prototype );
@@ -623,7 +635,18 @@ Warhead.extend( MovementModule );
 var Planet = function( setup ){
 	this.uniqueId();
 	
+	// type is just for client view ( it doesn't affect the game for now )
+		
+	if( typeof setup.x === 'undefined' || typeof setup.y === 'undefined' ) 
+		throw new Error('planet\'s coordinate must be specified');
+	
 	_extend( this, setup );
+	
+	if( typeof this.type === 'undefined' ) {
+		this.type = Math.floor(Math.random() * 5); // 5 because there is currently only 5 type of planet in the spritesheet
+	}
+	this.radius = 150;
+	
 }
 
 Planet.extend( MovementModule );
@@ -860,18 +883,7 @@ var Galaxy = function( gWidth, gHeight ){
 				units : [],
 				heads : []
 			};
-
-			function cloneSpecifics( real, props ){
-				var clone = {};
-				
-				for( var i = 0; i < props.length; ++ i ){
-					var arg = props[i];
-					clone[arg] = Math.floor( real[arg] );
-				}
-				return clone;
-				
-			}
-					
+			
 			function appendUnit( legionId, unit ){
 				if( unit.isDead() ) return;
 				
@@ -963,15 +975,29 @@ var Galaxy = function( gWidth, gHeight ){
 				
 			// units against statics			
 				for( var i = legion.units.length; i --;  ){
-					if( unitCollide( legion.units[i], _static ) ){
-						legion.units.splice( i, 1 );
+					var unit = legion.units[i];
+					if( unitCollide( unit, _static ) ){
+						// fix location
+						var dx = unit.x - _static.x;
+						var dy = unit.y - _static.y;
+						
+						var r = Math.sqrt( dx * dx + dy * dy );
+
+						var l = unit.radius + _static.radius;
+
+						unit.x = _static.x + l * dx / r ;
+						unit.y = _static.y + l * dy / r ;
+												
 						break;
 					}
 				}
 			// warheads against statics
 				for( var i = legion.warheads.length; i --;  ){
 					if( unitCollide( legion.warheads[i], _static ) ){
+						
+						legion.warheads.number = -1;
 						legion.warheads.splice( i, 1 );
+						
 						break;
 					}
 				}
@@ -1024,8 +1050,7 @@ var Galaxy = function( gWidth, gHeight ){
 				}
 				
 				if( mostThreatening ){
-					console.log( mostThreatening );
-					var MAX_AVOID_FORCE = unit.amax / 10;
+					var MAX_AVOID_FORCE = unit.amax / 2;
 					var avoidance_force = normalize({ x : ahead_x - mostThreatening.x, y : ahead_y - mostThreatening.y});
 
 					this.ax += avoidance_force.x * MAX_AVOID_FORCE;
@@ -1051,6 +1076,16 @@ var Galaxy = function( gWidth, gHeight ){
 			legions[i].updateEntities( dt );
 		}
 		
+	}
+
+	this.getPlanets = function(){
+		var data = [];
+		
+		for( var i = 0; i < statics.length; ++ i ){
+			data[i] = cloneSpecifics( statics[i], ['x','y','radius','type'] );
+		}
+		
+		return data;
 	}
 }
 
@@ -1079,7 +1114,6 @@ var blueLegion = GalaxyOne.addLegion( "blue" );
 fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 10000, type : UnitType.spy }) );
 blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy }) );
 
-
 setInterval( function(){
 	fune.moveTo( 0, 0 );	
 }, 12000 );
@@ -1090,14 +1124,10 @@ setTimeout( function(){
 	}, 12000 );
 }, 6000 );
 
-setInterval( function(){
-	console.log( fune.x, fune.y );
-	console.log( fune.vx, fune.vy );
-}, 1000 );
+//unitone.attack( fune );
+//unitwo.attack( fune );
+//unit3.attack( fune );
 
-unitone.attack( fune );
-unitwo.attack( fune );
-unit3.attack( fune );
 /*
 setInterval( function(){
 	console.log( fune.uniqueId() );
@@ -1112,7 +1142,7 @@ for( var i = 100; i--; ){
 }
 */
 // haven't been tested
-GalaxyOne.addPlanet( new Planet({ x : 2500, y : 2500 }) );
+GalaxyOne.addPlanet( new Planet({ x : 500, y : 500, type : 0 }) );
 
 
 var flag = false;
@@ -1173,6 +1203,8 @@ redlegion.issueCommand({
 	socket.on('identification', function(name){
 		socket.set('name', name );
 	});
+	
+	socket.emit('planet', GalaxyOne.getPlanets() );
 	
 	socket.on('message', function( data ){
 		socket.get('name', function( err, name ){

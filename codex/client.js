@@ -182,7 +182,7 @@ socket.on('legion', function( data ){
 
 
 // map data
-// example : { x : 1500, y : 300, type : 1 }
+// example : { x : 1500, y : 300, type : 1, radius : 300 }
 var planets = [];
 
 socket.on('planet', function( data ){
