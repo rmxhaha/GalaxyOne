@@ -5,17 +5,18 @@
 	margin : 0;
 	padding : 0;
 	
-	overflow-y : none;
+	overflow-y : hidden;
 
 	padding : 10;
 	position : fixed;
 	bottom : 0;
 	left : 0;
+	z-index : 999;
 }
 
 .chat-message {
 	font-family : 'Segoe UI', verdana;
-	font-size : 16px;
+	font-size : 14px;
 	color : white;
 }
 
@@ -28,4 +29,5 @@
 	margin : 0 auto;
 	bottom : 0;
 	display : none;
+	z-index : 1000;
 }
