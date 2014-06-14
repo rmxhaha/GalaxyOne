@@ -82,28 +82,8 @@ var context = canvas.getContext("2d");
 
 var viewRadius = []; // get from server
 
-function drawBackground( canvas ){
-	var ctx = canvas.getContext("2d");
-	var w = canvas.width;
-	var h = canvas.height;
-	
-	var grd = ctx.createRadialGradient(w/2,h/2,5,w/2,h/2, Math.max(w,h) / 2 );
-	grd.addColorStop(0.6, "#001F43");
-	grd.addColorStop(1, "#001022");
 
-	ctx.fillStyle = grd;
-	ctx.fillRect(0,0,w,h);
-}
-
-window.onresize = function( e ){
-	backgroundCanvas.width = canvas.width = window.innerWidth;
-	backgroundCanvas.height = canvas.height = window.innerHeight;
-
-	drawBackground( backgroundCanvas );
-}
-
-
-
+// mouse coordinate
 var mx = 0;
 var my = 0;
 
@@ -371,6 +351,26 @@ function mainloop(){
 		
 	requestAnimationFrame( mainloop );
 }
+
+function drawBackground( canvas ){
+	var ctx = canvas.getContext("2d");
+	var w = canvas.width;
+	var h = canvas.height;
+	
+	var grd = ctx.createRadialGradient(w/2,h/2,5,w/2,h/2, Math.max(w,h) / 2 );
+	grd.addColorStop(0.6, "#001F43");
+	grd.addColorStop(1, "#001022");
+
+	ctx.fillStyle = grd;
+	ctx.fillRect(0,0,w,h);
+}
+
+window.addEventListener("resize", function( e ){
+	backgroundCanvas.width = canvas.width = window.innerWidth;
+	backgroundCanvas.height = canvas.height = window.innerHeight;
+
+	drawBackground( backgroundCanvas );
+});
 
 window.addEventListener("load", function(){
 	backgroundCanvas.width = canvas.width = window.innerWidth;
