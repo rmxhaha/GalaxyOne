@@ -12,7 +12,7 @@
  *          aggressive mode : go there and if found then chase again if not then stop
  *          protective mode : popState
  *   -> planet 
- *      wishlist : undestructable and static, crashing into it won't damage
+ *      wishlist : undestructable and static, crashing into it won't damage (DONE)
  *   -> put legion pointer at every unit and warhead owned by the legion (DONE)
  *   -> put if to prevent sending data of dead unit (DONE)
  *   -> restructure code to be more fit to MVC in the client side ( Backbone js )
@@ -199,7 +199,7 @@ var callEvery = function( callback, timestep ){
 /* Global Settings */
 var gWidth = 5000;
 var gHeight = 5000;
-
+var dispersion_constant = 1;
 
 /** Metrics
  *  - viewRadius in pixel
@@ -408,6 +408,10 @@ var CommandModule = ( function() {
 		if( -10 >= this.vx || this.vx >= 10 ||
 			-10 >= this.vy || this.vy >= 10 ){
 			this.rapidStop();
+		}
+		else {
+			this.vx = 0;
+			this.vy = 0;
 		}
 	}
 			
@@ -887,7 +891,7 @@ var Galaxy = function( gWidth, gHeight ){
 			function appendUnit( legionId, unit ){
 				if( unit.isDead() ) return;
 				
-				var data = cloneSpecifics( unit, ['x','y','vx','vy']);
+				var data = cloneSpecifics( unit, ['x','y','vx','vy','number']);
 				data.type = unit.type.codex;
 				data.legion = legionId;
 				
@@ -897,7 +901,7 @@ var Galaxy = function( gWidth, gHeight ){
 			function appendHead( legionId, head ){
 				if( head.isOutOfFuel() ) return;
 			
-				var data = cloneSpecifics( head, ['x','y','vx','vy']);
+				var data = cloneSpecifics( head, ['x','y','vx','vy','number']);
 				data.type = head.type.codex;
 				data.legion = legionId;
 				
@@ -1006,14 +1010,54 @@ var Galaxy = function( gWidth, gHeight ){
 			
 		}
 		
-		// WARNING : Collision System hasn't been tested
-		// TEST 1  : No error has been detected
+		/**  Dispersion System
+		 *   -> even if unit may overlap each other, it tries not to
+		 *   -> only disperse on idle ?
+		 */
+/*
+		for( var u = 0; u < legions.length; ++ u ){
+			var legion = legions[u];
+			for( var i = 0; i < legion.units.length; ++ i ){
+				var unit = legion.units[i];
+				for( var p = 0; p < legions.length; ++ p ){
+					var legion2 = legions[p];
+					for( var q = 0; q < legion2.units.length; ++ q ){
+						var unit2 = legion2.units[q];
+
+						if( unit == unit2 ) continue;
+						
+						
+						// using columb force equation b/c that what I can think of
+						
+						var range = unitRange( unit, unit2 );
+						
+						var force = dispersion_constant * unit.number * unit2.number / range / range;
+						
+						console.log( force );
+						
+						// force direction
+						var direction = normalize({ x : unit2.x - unit.x, y : unit2.y - unit.y});
+						
+						unit.ax += direction.x * force;
+						unit.ay += direction.y * force;
+						
+						unit2.ax -= direction.x * force;
+						unit2.ay -= direction.y * force;
+						
+						
+					}
+				}
+			}
+		}
+		
+		*/ 
 		
 		/** Collision Avoidance system
 		 *  -> Avoidance system is applied to only static objects
 		 *  -> Dynamic objects such as warheads are not worth avoiding b/c you pretty much cannot avoid them 
 		 *  -> Another unit whether they are friend or foe aren't considered collided when they overlap 
 		 *     so there is no need to prevent collision since there will be no collisions
+		 *  
 		 */
 		
 		for( var u = 0; u < legions.length; ++ u ){
@@ -1053,13 +1097,10 @@ var Galaxy = function( gWidth, gHeight ){
 
 					var MAX_AVOID_FORCE = unit.amax;
 					var avoidance_force = normalize({ x : ahead_x - mostThreatening.x, y : ahead_y - mostThreatening.y});
-					console.log( avoidance_force );
 					
 					unit.ax += avoidance_force.x * MAX_AVOID_FORCE;
 					unit.ay += avoidance_force.y * MAX_AVOID_FORCE;
 				}
-				
-				
 				
 			}
 			
@@ -1168,6 +1209,14 @@ var app = express()
   , server = require('http').createServer(app)
   , io = require('socket.io').listen(server, {log : false});
 
+// WORK FLAG : change cookie storage from MemoryStore ( RAM ) to RedisStore for better memory management
+// 			http://expressjs-book.com/forums/topic/express-js-sessions-a-detailed-tutorial/
+  
+// enable session in express js
+app.use(express.cookieParser('LoveWillMakeYouMuchStronger'));
+app.use(express.cookieSession());
+app.use(app.router);
+
 
 server.listen(9414);
 
@@ -1175,7 +1224,10 @@ app.use('/codex/', express.static(__dirname + '/codex/'));
 app.use('/images/', express.static(__dirname + '/images/'));
 
 app.get('/', function (req, res) {
-	res.sendfile(__dirname + '/index.html');
+	res.sendfile(__dirname + '/template/index.html');
+});
+app.get('/login/', function( req,res ){
+	res.sendfile
 });
 
 
