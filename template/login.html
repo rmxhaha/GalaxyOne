@@ -1,0 +1,93 @@
+<html>
+<head>
+	<title>GalaxyOne Alpha 0.10</title>
+	<link rel="stylesheet" type="text/css" href="/codex/style.css">
+	<style>
+	#name {
+		font-family : 'Segoe UI';
+		font-size : 2em;
+		padding : 10px;
+		margin-top : 15px;
+	}
+	#galaxy-one-title {
+		font-family : 'Segoe UI';
+		font-size : 6em;
+		color : white;
+		text-align : center;
+	}
+	
+	#login-wrapper {
+		width : 100%;
+		position : fixed;
+		z-index : 1001;
+		top : 35%;		
+	}
+	
+	
+	</style>
+</head>
+<body>
+<canvas class=canvas-layer id=backgroundCanvas></canvas>
+<script>
+function drawBackground( canvas ){
+	var ctx = canvas.getContext("2d");
+	var w = canvas.width;
+	var h = canvas.height;
+	
+	var grd = ctx.createRadialGradient(w/2,h/2,5,w/2,h/2, Math.max(w,h) / 2 );
+	grd.addColorStop(0.6, "#001F43");
+	grd.addColorStop(1, "#001022");
+
+	ctx.fillStyle = grd;
+	ctx.fillRect(0,0,w,h);
+}
+
+window.addEventListener("resize", function( e ){
+	backgroundCanvas.width = window.innerWidth;
+	backgroundCanvas.height = window.innerHeight;
+
+	drawBackground( backgroundCanvas );
+});
+
+window.addEventListener("load", function(){
+	backgroundCanvas.width = window.innerWidth;
+	backgroundCanvas.height = window.innerHeight;
+
+	drawBackground( backgroundCanvas );
+});
+</script>
+
+
+<div id=login-wrapper>
+	<div id=galaxy-one-title>Galaxy One</div>
+	<div align=center>
+	<form action="/login/" method='POST'>
+		<input type=text name=name id=name value="Your name here..." maxlength=25 />
+	</form>
+	<script>	
+	( function( name ){
+		var _default = "Your name here...";
+
+		name.addEventListener("focus", function(){
+			if( this.value == _default ){
+				this.value = "";
+			}
+		});
+		name.addEventListener("blur", function(){
+			if( this.value.length == 0 ){
+				this.value = _default;
+			}
+		});
+	
+	})( document.getElementById("name") );
+		
+	</script>
+	</div>
+</div>
+
+
+
+
+
+</body>
+</html>
