@@ -301,8 +301,9 @@ function mainloop(){
 	context.translate( -camera.x, -camera.y );
 
 	if( gRadiusOn ){
-		// FLAG : NOT FINISHED , circle for range
 		context.strokeStyle = "white";
+		
+		// FLAG : NOT FINISHED , circle for range
 		for( var i = 0 ; i < cdata.units.length; ++ i ){
 			var unit = cdata.units[i];
 			
@@ -313,16 +314,21 @@ function mainloop(){
 			context.stroke();
 		}
 	}
-		
+	
+	context.strokeStyle = "white";
+
 	for( var i = 0; i < cdata.units.length; ++ i ){
 		var unit = cdata.units[i];
+
+		context.beginPath();
+		context.arc( unit.x,unit.y, camera.unitSize * Math.sqrt( unit.number / 1000 ), 0, Math.PI*2);
+		context.stroke();
 		
-		// if drawn
 		drawShip({
 			x : unit.x,
 			y : unit.y,
 			angle : angle( unit ),
-			size : camera.unitSize,
+			size : camera.unitSize * Math.sqrt( unit.number / 1000 ),
 			type : unit.type,
 			legion : unit.legion
 		})

@@ -1,7 +1,7 @@
 /**
  *	Important : 
  *	 -> when unit hits planet, it doesn't penetrate 
- *	 -> avoid hitting planet to smooth things out
+ *	 -> avoid hitting planet to smooth things out ( DONE )
  *   -> unit and warhead radius based on number
  *  
  *  Not So important
@@ -36,12 +36,14 @@ var EventEmitter = require('events').EventEmitter;
 function only_once(fn) {
 	var called = false;
 	return function() {
-		if (called) throw new Error("Callback was already called.");
+		if (called) {
+			return;
+			throw new Error("Callback was already called.");
+		}
 		called = true;
 		fn.apply(root, arguments);
 	}
 }
-
  
  
 function _extend( x, y ){
@@ -83,7 +85,7 @@ function unitRange( a, b ){
 }
 
 function unitCollide( a, b ){
-	return pDistance( a.x, a.y, b.x, b.y ) <= a.radius + b.radius;
+	return pDistance( a.x, a.y, b.x, b.y ) <= a.radius() + b.radius();
 }
 
 function normalize( vec ) {
@@ -238,7 +240,7 @@ var UnitType = {
 
 var viewRadiusModule = {
 	viewRadius : function(){
-		return this.type.viewRadius;
+		return this.type.viewRadius + this.radius();
 	}
 };
 
@@ -388,6 +390,11 @@ var HealthModule = {
 	},
 	isDead : function(){
 		return this.number <= 0;
+	},
+	radius : function(){
+		// 100px / 10k unit
+		// using num ~ pi * rad * rad
+		return 100 * Math.sqrt( this.number / 1000 );
 	}
 };
 
@@ -567,8 +574,16 @@ var CommandModule = ( function() {
 
 var Spaceship = function Spaceship( setup ) {
 	// HACK FLAG 
-	if( typeof setup.vmax != 'undefined' ){
+	if( typeof setup.vmax !== 'undefined' ){
 		console.log('WARNING : vmax is defined in unit')
+	}
+	
+	if( typeof setup.type === 'undefined' ){
+		throw new Error('type is not defined');
+	}
+
+	if( typeof setup.number !== 'number' ){
+		throw new Error('number is not defined');
 	}
 	
 	_extend( this, setup );
@@ -578,14 +593,12 @@ var Spaceship = function Spaceship( setup ) {
 
 	this.uniqueId(); // make sure it has an unique id
 	this.vmax = setup.type.vmax;
-	this.radius = 50;
 }
 
 Spaceship.extend( uniqueIdModule );
 Spaceship.extend( EventEmitter.prototype )
 Spaceship.extend({ 
 	type : 0, 
-	radius : 30,
 	update : function( dt ){
 		this.updateState( dt );
 		this.updateMovement( dt );
@@ -609,6 +622,14 @@ var Warhead = function Warhead( setup ){
 		console.log('WARNING : vmax is defined in unit')
 	}
 	
+	if( typeof setup.type === 'undefined' ){
+		throw new Error('type is not defined');
+	}
+
+	if( typeof setup.number !== 'number' ){
+		throw new Error('number is not defined');
+	}
+	
 	this.vmax = this.type.vmax;
 	
 	_extend( this, setup );
@@ -619,12 +640,11 @@ var Warhead = function Warhead( setup ){
 	this.vy = dir.y * this.vmax;
 }
 
+Warhead.extend( HealthModule );
 Warhead.extend( uniqueIdModule );
 Warhead.extend( EventEmitter.prototype );
 Warhead.extend({ 
 	type : WarheadType.missile, 
-	radius : 20,
-	number : 1,
 	distanceTraveled : 0,
 	maxTravelDistance : function(){
 		return this.type.travelRange;
@@ -666,14 +686,12 @@ var Planet = function( setup ){
 	if( typeof this.type === 'undefined' ) {
 		this.type = Math.floor(Math.random() * 5); // 5 because there is currently only 5 type of planet in the spritesheet
 	}
-	this.radius = 150;
-	
 }
 
 Planet.extend( uniqueIdModule );
 Planet.extend( MovementModule );
 Planet.extend({ 
-	radius : 150, 
+	radius : function(){ return 150; }, 
 	type : 99, 
 	damage : function(){
 		return Infinity;
@@ -757,8 +775,6 @@ var Galaxy = function( gWidth, gHeight ){
 		},
 		withinVisual : function( entity ){
 			// entity must have coordinate x and y
-			
-			var squaredRadius = entity
 			
 			for( var i = 0; i < this.units.length; ++ i ){
 				var dx = this.units[i].x - entity.x; dx *= dx;
@@ -871,8 +887,8 @@ var Galaxy = function( gWidth, gHeight ){
 				// EXPERIMENTAL FLAG
 				var unit2 = this.addUnit( new Spaceship( unit ) );
 				
-				unit.x -= unit.radius;
-				unit2.x += unit2.radius;
+				unit.x -= unit.radius();
+				unit2.x += unit2.radius();
 				
 				break;
 			case commandId.guard:
@@ -1005,7 +1021,7 @@ var Galaxy = function( gWidth, gHeight ){
 						
 						var r = Math.sqrt( dx * dx + dy * dy );
 
-						var l = unit.radius + _static.radius;
+						var l = unit.radius() + _static.radius();
 
 						unit.x = _static.x + l * dx / r ;
 						unit.y = _static.y + l * dy / r ;
@@ -1098,8 +1114,8 @@ var Galaxy = function( gWidth, gHeight ){
 				
 				for( var k = 0; k < statics.length; ++ k ){
 					if( 
-						pDistance( ahead_x, ahead_y, _static.x, _static.y ) < _static.radius ||
-						pDistance( ahead2_x, ahead2_y, _static.x, _static.y ) < _static.radius 
+						pDistance( ahead_x, ahead_y, _static.x, _static.y ) < _static.radius() ||
+						pDistance( ahead2_x, ahead2_y, _static.x, _static.y ) < _static.radius() 
 						){
 						
 						// FLAG : which is better range to unit it self or the predicted location ( ahead ) 
@@ -1172,7 +1188,7 @@ var blueLegion = GalaxyOne.addLegion( "blue" );
 
 
 fune = blueLegion.addUnit( new Spaceship({ x : 1000, y : 1000, number : 10000, type : UnitType.spy }) );
-blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy }) );
+blueLegion.addUnit( new Spaceship({ x : 3000, y : 1000, type : UnitType.spy, number : 100 }) );
 
 setInterval( function(){
 	fune.moveTo( 0, 0 );	
@@ -1252,6 +1268,7 @@ io.set('authorization', function(handshake, callback) {
 				console.log("Ses Errs ");
 				return callback('Session not found.', false);
 			}
+			
 			
 			handshake.session = handshake.signedCookies['connect.sess'];
 			return callback( null, true );
