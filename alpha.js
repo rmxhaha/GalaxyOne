@@ -25,7 +25,7 @@
 /****************************************************
  *  External Modules
  ****************************************************/
-
+var async = require('async');
 var assert = require('assert');
 var EventEmitter = require('events').EventEmitter;
 
@@ -33,6 +33,16 @@ var EventEmitter = require('events').EventEmitter;
  *  Global Modules
  ****************************************************/
 
+function only_once(fn) {
+	var called = false;
+	return function() {
+		if (called) throw new Error("Callback was already called.");
+		called = true;
+		fn.apply(root, arguments);
+	}
+}
+
+ 
  
 function _extend( x, y ){
 	for (var key in y) {
@@ -45,16 +55,6 @@ function _extend( x, y ){
 
 Function.prototype.extend = function ( y ) {
 	return _extend( this.prototype, y );
-}
-
-if ( typeof Object.prototype.uniqueId == "undefined" ) {
-	var id = 0;
-	Object.prototype.uniqueId = function() {
-		if ( typeof this.__uniqueid == "undefined" ) {
-			this.__uniqueid = ++id;
-		}
-		return this.__uniqueid;
-	};
 }
 
 function cloneSpecifics( real, props ){
@@ -200,6 +200,21 @@ var callEvery = function( callback, timestep ){
 var gWidth = 5000;
 var gHeight = 5000;
 var dispersion_constant = 1;
+
+var uniqueIdModule = ( function(){
+	var id = 0;
+	
+	return {
+		uniqueId : function(){
+			if ( typeof this.__uniqueid == "undefined" ) {
+				this.__uniqueid = ++id;
+			}
+			return this.__uniqueid;			
+		}
+	};
+	
+})();
+
 
 /** Metrics
  *  - viewRadius in pixel
@@ -566,6 +581,7 @@ var Spaceship = function Spaceship( setup ) {
 	this.radius = 50;
 }
 
+Spaceship.extend( uniqueIdModule );
 Spaceship.extend( EventEmitter.prototype )
 Spaceship.extend({ 
 	type : 0, 
@@ -603,6 +619,7 @@ var Warhead = function Warhead( setup ){
 	this.vy = dir.y * this.vmax;
 }
 
+Warhead.extend( uniqueIdModule );
 Warhead.extend( EventEmitter.prototype );
 Warhead.extend({ 
 	type : WarheadType.missile, 
@@ -653,6 +670,7 @@ var Planet = function( setup ){
 	
 }
 
+Planet.extend( uniqueIdModule );
 Planet.extend( MovementModule );
 Planet.extend({ 
 	radius : 150, 
@@ -1205,31 +1223,85 @@ callEvery( mainloop, 50 );
  */
 
 var express = require('express');
+var cookieParser = require('cookie-parser');
+var bodyParser = require('body-parser');
+var session = require('express-session');
+
 var app = express()
-  , server = require('http').createServer(app)
-  , io = require('socket.io').listen(server, {log : false});
+  , server = require('http').Server(app)
+  , io = require('socket.io')(server);
 
 // WORK FLAG : change cookie storage from MemoryStore ( RAM ) to RedisStore for better memory management
 // 			http://expressjs-book.com/forums/topic/express-js-sessions-a-detailed-tutorial/
   
 // enable session in express js
-app.use(express.cookieParser('LoveWillMakeYouMuchStronger'));
-app.use(express.cookieSession());
-app.use(app.router);
+app.use( cookieParser() );
+  
+var session_storage = new session.MemoryStore();
+var session_secret = 'LoveWillMakeYouMuchStronger';
+var session_key = 'sesid';
 
+app.use( session({ secret : session_secret, store : session_storage }) );
 
-server.listen(9414);
+io.set('authorization', function(handshake, callback) {
+	
+	if (handshake.headers.cookie) {
+		// pass a req, res, and next as if it were middleware
+		cookieParser( session_secret )(handshake, null, function(err) {
+			if( err ) {
+				console.log("Ses Errs ");
+				return callback('Session not found.', false);
+			}
+			
+			handshake.session = handshake.signedCookies['connect.sess'];
+			return callback( null, true );
+		});
+	} else {
+		return callback('No session.', false);
+	}
+});
+
+app.use( bodyParser() );
+
+/*
+app.use(express.cookieParser({ 
+	secret : 'LoveWillMakeYouMuchStronger',
+	key : 'express.sid'
+}));
+*/
 
 app.use('/codex/', express.static(__dirname + '/codex/'));
 app.use('/images/', express.static(__dirname + '/images/'));
 
+server.listen(9414);
+
 app.get('/', function (req, res) {
+	if( !req.session.name ) {
+		res.redirect("/login/");
+		return
+	}
+
 	res.sendfile(__dirname + '/template/index.html');
 });
+
 app.get('/login/', function( req,res ){
-	res.sendfile
+	res.sendfile(__dirname + '/template/login.html');
 });
 
+app.post('/login/', function( req, res ){
+	if( req.session.name ) {
+		res.redirect("/");
+		return;
+	}
+
+	if( req.body.name )	{
+		req.session.name = req.body.name;
+		res.redirect("/");
+		return;
+	}
+	
+	res.redirect('/login/');
+});
 
 
  /****************************************************
@@ -1239,7 +1311,7 @@ app.get('/login/', function( req,res ){
  *  -> broadcast data as necessary
  ****************************************************/
 
-io.on('connection', function( socket ){
+io.on('connection', only_once( function( socket ){
 /*
 redlegion.issueCommand({
 	uid : unitwo.uniqueId(), 
@@ -1248,44 +1320,48 @@ redlegion.issueCommand({
 	tlegion : blueLegion.id
 });
 */
+	var session = [];
 
-	var secret = Math.floor( Math.random() * 1000000 );
-	var legion = redlegion; // will be setup by connection later on
-	
-	socket.emit('identification', { id : secret } );
-	socket.on('identification', function(name){
-		socket.set('name', name );
-	});
-	
-	socket.emit('planet', GalaxyOne.getPlanets() );
-	
-	socket.on('message', function( data ){
-		socket.get('name', function( err, name ){
-			if( err ) return socket.emit('name hasn\'t been set yet');
-			io.sockets.emit('broadcast', {sender : name, message : data} );
-		});
-	});
-	
-	socket.on('disconnect', function(){
-		// client disconnected
-	});
+	async.series( [
+		function( callback ){
+			cookieParser( session_secret )( socket.handshake, null, function(err) {
+				session = socket.handshake.signedCookies['connect.sess'];
+				callback();
+			});
+		}, function( callback ){
+			var legion = redlegion; // will be setup by connection later on
+			
+			socket.emit('planet', GalaxyOne.getPlanets() );
+			
+			socket.on('message', function( data ){
+				io.sockets.emit('broadcast', {sender : session.name, message : data} );
+			});
+			
+			socket.on('disconnect', function(){
+				// client disconnected
+			});
 
-	socket.on('command', function( command ){
-		legion.issueCommand( command );
+			socket.on('command', function( command ){
+				legion.issueCommand( command );
+			});
+			
+			function updateState(){
+				socket.emit('legion', legion.getClientData() );
+				
+			}
+				
+			/**
+			 *  FUTURE FEATURE : update all data at first then update again at a certain period of time
+			 *  				 only send updates
+			 */
+			callEvery( updateState, 100 );
+			updateState();
+			
+		}
+	], function( err ){
+		throw err;
 	});
-	
-	function updateState(){
-		socket.emit('legion', legion.getClientData() );
-		
-	}
-		
-	/**
-	 *  FUTURE FEATURE : update all data at first then update again at a certain period of time
-	 *  				 only send updates
-	 */
-	callEvery( updateState, 100 );
-	updateState();
-});
+}) );
 
 
 /*
