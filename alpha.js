@@ -925,7 +925,8 @@ var Galaxy = function( gWidth, gHeight ){
 			function appendUnit( legionId, unit ){
 				if( unit.isDead() ) return;
 				
-				var data = cloneSpecifics( unit, ['x','y','vx','vy','number']);
+				var data = cloneSpecifics( unit, ['x','y','vx','vy']);
+				data.radius = unit.radius();
 				data.type = unit.type.codex;
 				data.legion = legionId;
 				
@@ -935,7 +936,8 @@ var Galaxy = function( gWidth, gHeight ){
 			function appendHead( legionId, head ){
 				if( head.isOutOfFuel() ) return;
 			
-				var data = cloneSpecifics( head, ['x','y','vx','vy','number']);
+				var data = cloneSpecifics( head, ['x','y','vx','vy']);
+				data.radius = head.radius();
 				data.type = head.type.codex;
 				data.legion = legionId;
 				

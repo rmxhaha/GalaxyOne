@@ -321,14 +321,14 @@ function mainloop(){
 		var unit = cdata.units[i];
 
 		context.beginPath();
-		context.arc( unit.x,unit.y, camera.unitSize * Math.sqrt( unit.number / 1000 ), 0, Math.PI*2);
+		context.arc( unit.x,unit.y, unit.radius, 0, Math.PI*2);
 		context.stroke();
 		
 		drawShip({
 			x : unit.x,
 			y : unit.y,
 			angle : angle( unit ),
-			size : camera.unitSize * Math.sqrt( unit.number / 1000 ),
+			size : unit.radius,
 			type : unit.type,
 			legion : unit.legion
 		})
