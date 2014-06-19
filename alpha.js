@@ -3,6 +3,7 @@
  *	 -> when unit hits planet, it doesn't penetrate 
  *	 -> avoid hitting planet to smooth things out ( DONE )
  *   -> unit and warhead radius based on number
+ *   -> alphanumeric check on login
  *  
  *  Not So important
  *   -> divide this file into multiple file
@@ -977,183 +978,229 @@ var Galaxy = function( gWidth, gHeight ){
 		}
 	});
 	 
-	this.update = function( dt ){	
+	this.update = function( real_dt, iteration_count ){	
 		/** Collision System 
 		 *   -> unit collision with Warhead
 		 *   -> unit collision with static objects ( e.g. planets )
 		 */
-		for( var u = 0; u < legions.length; ++ u ){
-			// units against enemy warheads
-			for( var w = 0; w < legions.length; ++ w ){
-				if( u == w ) continue;
-				
-				// references
-				var units = legions[u].units;
-				var warheads = legions[w].warheads;
-				
-				/** check if warhead hits
-				 *  if it does tell unit that it has been hit
-				 *  				emit event explosion
-				 *  				and destroy the warhead after that
-				 */
-				for( var i = 0; i < units.length; ++ i ){
-					for( var k = warheads.length; k -- ; ){
-						if( unitCollide( units[i], warheads[k] ) ){
-							units[i].hit( warheads[k] );
-							warheads[k].emit('explosion');
-							warheads.splice( k, 1 );
+		
+		
+		
+		var dt = real_dt / iteration_count;
+		while( iteration_count -- ){
+			for( var u = 0; u < legions.length; ++ u ){
+				// units against enemy warheads
+				for( var w = 0; w < legions.length; ++ w ){
+					if( u == w ) continue;
+					
+					// references
+					var units = legions[u].units;
+					var warheads = legions[w].warheads;
+					
+					/** check if warhead hits
+					 *  if it does tell unit that it has been hit
+					 *  				emit event explosion
+					 *  				and destroy the warhead after that
+					 */
+					for( var i = 0; i < units.length; ++ i ){
+						for( var k = warheads.length; k -- ; ){
+							if( unitCollide( units[i], warheads[k] ) ){
+								units[i].hit( warheads[k] );
+								warheads[k].emit('explosion');
+								warheads.splice( k, 1 );
+							}
 						}
 					}
+					
 				}
 				
-			}
-			
-			var legion = legions[u];
-
-			for( var k = 0; k < statics.length; ++ k ){
-				var _static = statics[k];
-				
-			// units against statics			
-				for( var i = legion.units.length; i --;  ){
-					var unit = legion.units[i];
-					if( unitCollide( unit, _static ) ){
-						// fix location
-						var dx = unit.x - _static.x;
-						var dy = unit.y - _static.y;
-						
-						var r = Math.sqrt( dx * dx + dy * dy );
-
-						var l = unit.radius() + _static.radius();
-
-						unit.x = _static.x + l * dx / r ;
-						unit.y = _static.y + l * dy / r ;
-												
-						break;
-					}
-				}
-			// warheads against statics
-				for( var i = legion.warheads.length; i --;  ){
-					if( unitCollide( legion.warheads[i], _static ) ){
-						
-						legion.warheads.number = -1;
-						legion.warheads.splice( i, 1 );
-						
-						break;
-					}
-				}
-
-			}
-			
-		}
-		
-		/**  Dispersion System
-		 *   -> even if unit may overlap each other, it tries not to
-		 *   -> only disperse on idle ?
-		 */
-/*
-		for( var u = 0; u < legions.length; ++ u ){
-			var legion = legions[u];
-			for( var i = 0; i < legion.units.length; ++ i ){
-				var unit = legion.units[i];
-				for( var p = 0; p < legions.length; ++ p ){
-					var legion2 = legions[p];
-					for( var q = 0; q < legion2.units.length; ++ q ){
-						var unit2 = legion2.units[q];
-
-						if( unit == unit2 ) continue;
-						
-						
-						// using columb force equation b/c that what I can think of
-						
-						var range = unitRange( unit, unit2 );
-						
-						var force = dispersion_constant * unit.number * unit2.number / range / range;
-						
-						console.log( force );
-						
-						// force direction
-						var direction = normalize({ x : unit2.x - unit.x, y : unit2.y - unit.y});
-						
-						unit.ax += direction.x * force;
-						unit.ay += direction.y * force;
-						
-						unit2.ax -= direction.x * force;
-						unit2.ay -= direction.y * force;
-						
-						
-					}
-				}
-			}
-		}
-		
-		*/ 
-		
-		/** Collision Avoidance system
-		 *  -> Avoidance system is applied to only static objects
-		 *  -> Dynamic objects such as warheads are not worth avoiding b/c you pretty much cannot avoid them 
-		 *  -> Another unit whether they are friend or foe aren't considered collided when they overlap 
-		 *     so there is no need to prevent collision since there will be no collisions
-		 *  
-		 */
-		
-		for( var u = 0; u < legions.length; ++ u ){
-			var legion = legions[u];
-			for( var i = 0; i < legion.units.length; ++ i ){
-				var unit = legion.units[i];
-
-				var MAX_SEE_AHEAD = unit.vmax * dt * 10;
-
-				
-				var vdir = normalize({ x : unit.vx, y : unit.vy });
-				var ahead_x = unit.x + vdir.x * MAX_SEE_AHEAD;
-				var ahead_y = unit.y + vdir.y * MAX_SEE_AHEAD;
-				
-				var ahead2_x = unit.x + vdir.x * MAX_SEE_AHEAD * 0.5;
-				var ahead2_y = unit.y + vdir.y * MAX_SEE_AHEAD * 0.5;
-								
-				var mostThreatening = false;
-				var mostThreateningRange = Infinity;
+				var legion = legions[u];
 				
 				for( var k = 0; k < statics.length; ++ k ){
-					if( 
-						pDistance( ahead_x, ahead_y, _static.x, _static.y ) < _static.radius() ||
-						pDistance( ahead2_x, ahead2_y, _static.x, _static.y ) < _static.radius() 
-						){
-						
-						// FLAG : which is better range to unit it self or the predicted location ( ahead ) 
-						var range = pDistance( unit.x, unit.y, _static.x, _static.y );
-						if( range < mostThreateningRange ){
-							mostThreatening = _static;
-							mostThreateningRange = range;
+					var _static = statics[k];
+					
+				// units against statics			
+					for( var i = legion.units.length; i --;  ){
+						var unit = legion.units[i];
+						if( unitCollide( unit, _static ) ){
+							// fix location
+							var dx = unit.x - _static.x;
+							var dy = unit.y - _static.y;
+							
+							var r = Math.sqrt( dx * dx + dy * dy );
+
+							var l = unit.radius() + _static.radius();
+
+							unit.x = _static.x + l * dx / r ;
+							unit.y = _static.y + l * dy / r ;
+													
+							break;
 						}
 					}
-				}
-				
-				if( mostThreatening ){
+				// warheads against statics
+					for( var i = legion.warheads.length; i --;  ){
+						if( unitCollide( legion.warheads[i], _static ) ){
+							
+							legion.warheads.number = -1;
+							legion.warheads.splice( i, 1 );
+							
+							break;
+						}
+					}
 
-					var MAX_AVOID_FORCE = unit.amax;
-					var avoidance_force = normalize({ x : ahead_x - mostThreatening.x, y : ahead_y - mostThreatening.y});
-					
-					unit.ax += avoidance_force.x * MAX_AVOID_FORCE;
-					unit.ay += avoidance_force.y * MAX_AVOID_FORCE;
 				}
 				
 			}
 			
+			// unit against unit
+			for( var u = 0; u < legions.length; ++ u ){
+				for( var w = 0; w < legions.length; ++ w ){
+					
+					// references
+					var first = legions[u].units;
+					var second = legions[w].units;
+					
+					for( var i = 0; i < first.length; ++ i ){
+						for( var k = 0; k < second.length; ++ k ){
+							var one = first[i];
+							var two = second[k];
+							if( one === two ) continue;
+							
+							if( unitCollide( one, two ) ){
+								// fix location
+								var dx = one.x - two.x;
+								var dy = one.y - two.y;
+								
+								var r = Math.sqrt( dx * dx + dy * dy );
+
+								var l = (one.radius() + two.radius());
+
+								one.x = two.x + l * dx / r ;
+								one.y = two.y + l * dy / r ;
+								
+								one.x = two.x + l * dx / r ;
+								one.y = two.y + l * dy / r ;
+								
+														
+								break;
+							}
+							
+						}
+					}
+					
+					
+					
+				}
+			}
+
+			/**  Dispersion System
+			 *   -> even if unit may overlap each other, it tries not to
+			 *   -> only disperse on idle ?
+			 */
+	/*
+			for( var u = 0; u < legions.length; ++ u ){
+				var legion = legions[u];
+				for( var i = 0; i < legion.units.length; ++ i ){
+					var unit = legion.units[i];
+					for( var p = 0; p < legions.length; ++ p ){
+						var legion2 = legions[p];
+						for( var q = 0; q < legion2.units.length; ++ q ){
+							var unit2 = legion2.units[q];
+
+							if( unit == unit2 ) continue;
+							
+							
+							// using columb force equation b/c that what I can think of
+							
+							var range = unitRange( unit, unit2 );
+							
+							var force = dispersion_constant * unit.number * unit2.number / range / range;
+							
+							console.log( force );
+							
+							// force direction
+							var direction = normalize({ x : unit2.x - unit.x, y : unit2.y - unit.y});
+							
+							unit.ax += direction.x * force;
+							unit.ay += direction.y * force;
+							
+							unit2.ax -= direction.x * force;
+							unit2.ay -= direction.y * force;
+							
+							
+						}
+					}
+				}
+			}
+			
+			*/ 
+			
+			/** Collision Avoidance system
+			 *  -> Avoidance system is applied to only static objects
+			 *  -> Dynamic objects such as warheads are not worth avoiding b/c you pretty much cannot avoid them 
+			 *  -> Another unit whether they are friend or foe aren't considered collided when they overlap 
+			 *     so there is no need to prevent collision since there will be no collisions
+			 *  
+			 */
+			
+			for( var u = 0; u < legions.length; ++ u ){
+				var legion = legions[u];
+				for( var i = 0; i < legion.units.length; ++ i ){
+					var unit = legion.units[i];
+
+					var MAX_SEE_AHEAD = unit.vmax * dt * 10;
+
+					
+					var vdir = normalize({ x : unit.vx, y : unit.vy });
+					var ahead_x = unit.x + vdir.x * MAX_SEE_AHEAD;
+					var ahead_y = unit.y + vdir.y * MAX_SEE_AHEAD;
+					
+					var ahead2_x = unit.x + vdir.x * MAX_SEE_AHEAD * 0.5;
+					var ahead2_y = unit.y + vdir.y * MAX_SEE_AHEAD * 0.5;
+									
+					var mostThreatening = false;
+					var mostThreateningRange = Infinity;
+					
+					for( var k = 0; k < statics.length; ++ k ){
+						if( 
+							pDistance( ahead_x, ahead_y, _static.x, _static.y ) < _static.radius() ||
+							pDistance( ahead2_x, ahead2_y, _static.x, _static.y ) < _static.radius() 
+							){
+							
+							// FLAG : which is better range to unit it self or the predicted location ( ahead ) 
+							var range = pDistance( unit.x, unit.y, _static.x, _static.y );
+							if( range < mostThreateningRange ){
+								mostThreatening = _static;
+								mostThreateningRange = range;
+							}
+						}
+					}
+					
+					if( mostThreatening ){
+
+						var MAX_AVOID_FORCE = unit.amax;
+						var avoidance_force = normalize({ x : ahead_x - mostThreatening.x, y : ahead_y - mostThreatening.y});
+						
+						unit.ax += avoidance_force.x * MAX_AVOID_FORCE;
+						unit.ay += avoidance_force.y * MAX_AVOID_FORCE;
+					}
+					
+				}
+				
+			}
+			
+			
+			// WARNING : Collision Avoidance hasn't been tested
+			
+			/** Missile Homing system
+			 *   -> Seek target at full speed
+			 */
+			
+			/* Legion logics update */
+			for( var i = 0; i < legions.length; ++ i ){
+				legions[i].updateEntities( dt );
+			}
 		}
-		
-		
-		// WARNING : Collision Avoidance hasn't been tested
-		
-		/** Missile Homing system
-		 *   -> Seek target at full speed
-		 */
-		
-		/* Legion logics update */
-		for( var i = 0; i < legions.length; ++ i ){
-			legions[i].updateEntities( dt );
-		}
-		
 	}
 
 	this.getPlanets = function(){
@@ -1230,7 +1277,7 @@ function mainloop( dt ){
 	// convert to milliseconds
 	dt /= 1000; 
 	
-	GalaxyOne.update( dt );	
+	GalaxyOne.update( dt, 6 );	
 }
 
 callEvery( mainloop, 50 );
