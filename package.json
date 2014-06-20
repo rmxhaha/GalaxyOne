@@ -8,6 +8,7 @@
 		"socket.io" : ">= 0.9.16",
 		"body-parser" : ">=1.0.0",
 		"cookie-parser" : ">=1.0.0",
-		"express-session" : ">=1.0.0"
+		"express-session" : ">=1.0.0",
+		"mustache" : ">=0.8.2"
 	}
 }

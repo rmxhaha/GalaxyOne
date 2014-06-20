@@ -6,7 +6,7 @@
  *  -> opt for clearing and re drawing necessary object only 
  */
 
-var socket = io.connect('http://localhost/');	
+var socket = io.connect('http://localhost/', {query : query} );
 
 
 function _extend( x, y ){
@@ -23,7 +23,7 @@ function _extend( x, y ){
  *  UI Improvement : 
  *   -> message disappear after certain amount of time
  *   -> Chat Input only appear when enter is pressed then disappear again after message has been sent
- */
+ */ 
  
 //socket.emit( 'identification', prompt('Your Name : ') );
 socket.emit( 'identification', "Test Subject" );

@@ -26,6 +26,7 @@
 /****************************************************
  *  External Modules
  ****************************************************/
+var fs = require('fs');
 var async = require('async');
 var assert = require('assert');
 var EventEmitter = require('events').EventEmitter;
@@ -1291,6 +1292,7 @@ var express = require('express');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var session = require('express-session');
+var Mustache = require('mustache');
 
 var app = express()
   , server = require('http').Server(app)
@@ -1307,34 +1309,7 @@ var session_secret = 'LoveWillMakeYouMuchStronger';
 var session_key = 'sesid';
 
 app.use( session({ secret : session_secret, store : session_storage }) );
-
-io.set('authorization', function(handshake, callback) {
-	
-	if (handshake.headers.cookie) {
-		// pass a req, res, and next as if it were middleware
-		cookieParser( session_secret )(handshake, null, function(err) {
-			if( err ) {
-				console.log("Ses Errs ");
-				return callback('Session not found.', false);
-			}
-			
-			
-			handshake.session = handshake.signedCookies['connect.sess'];
-			return callback( null, true );
-		});
-	} else {
-		return callback('No session.', false);
-	}
-});
-
 app.use( bodyParser() );
-
-/*
-app.use(express.cookieParser({ 
-	secret : 'LoveWillMakeYouMuchStronger',
-	key : 'express.sid'
-}));
-*/
 
 app.use('/codex/', express.static(__dirname + '/codex/'));
 app.use('/images/', express.static(__dirname + '/images/'));
@@ -1342,15 +1317,23 @@ app.use('/images/', express.static(__dirname + '/images/'));
 server.listen(9414);
 
 app.get('/', function (req, res) {
+	req.session.name = "DEBUG"
 	if( !req.session.name ) {
 		res.redirect("/login/");
 		return
 	}
+	
+	var template = fs.readFileSync( __dirname + '/template/index.html' ).toString();
 
-	res.sendfile(__dirname + '/template/index.html');
+	res.send( Mustache.render( template, {name : req.session.name} ) );
 });
 
 app.get('/login/', function( req,res ){
+	if( req.session.name ) {
+		res.redirect("/");
+		return;
+	}
+
 	res.sendfile(__dirname + '/template/login.html');
 });
 
@@ -1361,7 +1344,8 @@ app.post('/login/', function( req, res ){
 	}
 
 	if( req.body.name )	{
-		req.session.name = req.body.name;
+		// remove non-alpha numeric string to prevent security hole
+		req.session.name = req.body.name.replace(/\W/g, '');;
 		res.redirect("/");
 		return;
 	}
@@ -1377,61 +1361,47 @@ app.post('/login/', function( req, res ){
  *  -> broadcast data as necessary
  ****************************************************/
 
-io.on('connection', only_once( function( socket ){
-/*
-redlegion.issueCommand({
-	uid : unitwo.uniqueId(), 
-	cid : 1, 
-	tid : fune.uniqueId(), 
-	tlegion : blueLegion.id
-});
-*/
-	var session = [];
+io.on('connection', function( socket ){
+	var name = "";
+	if( socket.handshake.query ){
+		name = socket.handshake.query.name || 'no-name'; 
+	}
 
-	async.series( [
-		function( callback ){
-			cookieParser( session_secret )( socket.handshake, null, function(err) {
-				session = socket.handshake.signedCookies['connect.sess'];
-				callback();
-			});
-		}, function( callback ){
-			var legion = redlegion; // will be setup by connection later on
-			
-			socket.emit('planet', GalaxyOne.getPlanets() );
-			
-			socket.on('message', function( data ){
-				io.sockets.emit('broadcast', {sender : session.name, message : data} );
-			});
-			
-			socket.on('disconnect', function(){
-				// client disconnected
-			});
-
-			socket.on('command', function( command ){
-				legion.issueCommand( command );
-			});
-			
-			function updateState(){
-				socket.emit('legion', legion.getClientData() );
-				
-			}
-				
-			/**
-			 *  FUTURE FEATURE : update all data at first then update again at a certain period of time
-			 *  				 only send updates
-			 */
-			callEvery( updateState, 100 );
-			updateState();
-			
-		}
-	], function( err ){
-		throw err;
+	var legion = redlegion; // will be setup by connection later on
+	
+	socket.emit('planet', GalaxyOne.getPlanets() );
+	
+	socket.on('message', function( data ){
+		io.sockets.emit('broadcast', {sender : name, message : data} );
 	});
-}) );
+	
+	socket.on('disconnect', function(){
+		// client disconnected
+	});
+
+	socket.on('command', function( command ){
+		legion.issueCommand( command );
+	});
+	
+	function updateState(){
+		socket.emit('legion', legion.getClientData() );
+		
+	}
+		
+	/**
+	 *  FUTURE FEATURE : update all data at first then update again at a certain period of time
+	 *  				 only send updates
+	 */
+	callEvery( updateState, 100 );
+	updateState();
+
+});
 
 
 /*
 	WORK FLAG : on the socket authentication and routing system
 */
  
+ 
+
  
