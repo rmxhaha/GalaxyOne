@@ -61,10 +61,24 @@ window.addEventListener("load", function(){
 <div id=login-wrapper>
 	<div id=galaxy-one-title>Galaxy One</div>
 	<div align=center>
-	<form action="/login/" method='POST'>
+	<form action="/login/" method='POST' id=login-form>
 		<input type=text name=name id=name value="Your name here..." maxlength=25 />
 	</form>
 	<script>	
+	
+	function isAlphaNumeric( input ){
+		var re = /^[a-z0-9]+$/i;
+		return re.test( input );
+	}
+	document.getElementById('login-form').addEventListener('submit', function( e ){
+		if( !isAlphaNumeric( document.getElementById("name").value ) ){
+			alert('name may only content a-z or 0-9');
+			e.preventDefault();
+		}
+		
+	});
+	
+	
 	( function( name ){
 		var _default = "Your name here...";
 
